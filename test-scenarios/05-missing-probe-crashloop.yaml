@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: probe-test
+  namespace: default
+  labels:
+    scenario: missing-probe
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: probe-test
+  template:
+    metadata:
+      labels:
+        app: probe-test
+    spec:
+      containers:
+        - name: app
+          image: python:3.12-slim
+          command: ["python", "-c", "import time; time.sleep(5); raise RuntimeError('Simulated crash')"]
+          resources:
+            limits:
+              memory: "64Mi"
+              cpu: "100m"

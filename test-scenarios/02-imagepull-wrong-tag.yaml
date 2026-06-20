@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: imagepull-test
+  namespace: default
+  labels:
+    scenario: imagepull-wrong-tag
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: imagepull-test
+  template:
+    metadata:
+      labels:
+        app: imagepull-test
+    spec:
+      containers:
+        - name: app
+          image: nginx:this-tag-does-not-exist-xyz123
+          resources:
+            limits:
+              memory: "64Mi"
+              cpu: "100m"

@@ -1,0 +1,37 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - ~/.kube/kind-config:/root/.kube/config:ro
+      - ~/.kube/config:/root/.kube/all-config:ro
+    env_file:
+      - ./backend/.env
+    restart: unless-stopped
+    networks:
+      - default
+      - kind
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    env_file:
+      - ./frontend/.env.local
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+networks:
+  default:
+  kind:
+    external: true
