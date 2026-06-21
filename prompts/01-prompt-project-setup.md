@@ -1,64 +1,45 @@
-# AI Kubernetes Agent
+# Prompt 01 — Project Setup & Monorepo Scaffold
 
-AI-powered Kubernetes troubleshooting agent.
+## What This Prompt Was Trying to Achieve
 
-## Quick Start
+Establish the full project skeleton for KubeOracle from scratch — a production-style AI Kubernetes troubleshooting tool. The goal was to create a working, runnable monorepo with a FastAPI backend, a Next.js frontend, and Docker Compose wiring them together, with all placeholder directories and config files in place so future prompts could build on a stable foundation.
 
-```bash
-docker compose up --build
-```
+---
 
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:8000
-- Health check: http://localhost:8000/health
+## Key Requirements Covered
 
-## Development (without Docker)
+- Monorepo layout under `ai-kubernetes-agent/` with `backend/`, `frontend/`, `docs/`, and `prompts/` directories
+- FastAPI backend with a `GET /health` endpoint returning service status
+- Next.js 14 App Router frontend with TypeScript and Tailwind CSS
+- Docker Compose setup to run both services together (`backend` on port 8000, `frontend` on port 3000)
+- Environment variable scaffolding — `backend/.env.example` and `frontend/.env.local.example`
+- Placeholder module directories (`kubernetes/`, `ai/`, `services/`, `models/`, `hooks/`, `types/`, `components/`) with `.gitkeep` files so the structure was committed to git before any logic was added
+- A `README.md` with Quick Start, local dev, and environment variable documentation
+- `.gitignore` for both Python and Node environments
 
-**Backend:**
-```bash
-cd backend
-pip install -r requirements.txt
-cp .env.example .env
-uvicorn main:app --reload
-```
+---
 
-**Frontend:**
-```bash
-cd frontend
-npm install
-cp .env.local.example .env.local
-npm run dev
-```
+## Tech Stack and Components Introduced
 
-## Environment Variables
+| Layer | Technology |
+|-------|-----------|
+| Backend framework | FastAPI + uvicorn |
+| Backend config | `pydantic-settings` via `core/config.py` |
+| Backend logging | `loguru` |
+| Frontend framework | Next.js 14 (App Router) |
+| Frontend language | TypeScript |
+| Frontend styling | Tailwind CSS 3.4 (locked — do not upgrade to v4) |
+| Containerisation | Docker Compose (two services) |
+| BaaS | InsForge (`https://pus66i6p.eu-central.insforge.app`) — configured but not yet wired |
 
-| File | Variable | Description |
-|------|----------|-------------|
-| `backend/.env` | `OPENROUTER_API_KEY` | OpenRouter API key |
-| `backend/.env` | `OPENROUTER_MODEL` | LLM model to use |
-| `backend/.env` | `KUBECONFIG_PATH` | Path to kubeconfig file |
-| `frontend/.env.local` | `NEXT_PUBLIC_API_BASE_URL` | Backend API URL |
+---
 
-## Project Structure
+## Expected Result
 
-```
-ai-kubernetes-agent/
-├── backend/
-│   ├── api/routes/      # FastAPI route handlers
-│   ├── core/            # Config and settings
-│   ├── kubernetes/      # Kubernetes investigation layer (placeholder)
-│   ├── ai/              # AI reasoning layer (placeholder)
-│   ├── services/        # Business logic (placeholder)
-│   ├── models/          # Pydantic schemas
-│   └── main.py          # FastAPI app entry point
-├── frontend/
-│   └── src/
-│       ├── app/         # Next.js App Router pages
-│       ├── components/  # React components (placeholder)
-│       ├── services/    # API service layer (placeholder)
-│       ├── hooks/       # Custom React hooks (placeholder)
-│       └── types/       # TypeScript types (placeholder)
-├── docs/
-├── prompts/
-└── docker-compose.yml
-```
+After running this prompt:
+
+- `docker compose up --build` starts both services with no errors
+- `GET http://localhost:8000/health` returns `{"status": "ok"}`
+- `http://localhost:3000` renders a placeholder Next.js page
+- All module directories exist so future prompt code can `import` from them without path errors
+- Environment variable files are documented but not committed to version control
