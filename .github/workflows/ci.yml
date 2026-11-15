@@ -15,13 +15,13 @@ jobs:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_PASSWORD: kubeoracle
-          POSTGRES_DB: kubeoracle
+          POSTGRES_PASSWORD: kubesift
+          POSTGRES_DB: kubesift
         ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
     env:
-      KUBEORACLE_TEST_DATABASE_URL: postgresql://postgres:kubeoracle@localhost:5432/kubeoracle
+      KUBESIFT_TEST_DATABASE_URL: postgresql://postgres:kubesift@localhost:5432/kubesift
     strategy:
       fail-fast: false
       matrix:
@@ -34,7 +34,7 @@ jobs:
           cache: pip
       - run: pip install -e ".[dev]"
       - run: ruff check src tests
-      - run: pytest --cov=kubeoracle --cov-report=term-missing
+      - run: pytest --cov=kubesift --cov-report=term-missing
 
   oldest-deps:
     # The Kubernetes client changed its low-level API in v37; keep supporting older releases.
@@ -56,14 +56,14 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -e .
-      - run: helm lint deploy/helm/kubeoracle
-      # Dogfooding: the chart must pass KubeOracle's own checks, in both modes.
-      - run: helm template ko deploy/helm/kubeoracle | kubeoracle lint - --fail-on medium
+      - run: helm lint deploy/helm/kubesift
+      # Dogfooding: the chart must pass KubeSift's own checks, in both modes.
+      - run: helm template ko deploy/helm/kubesift | kubesift lint - --fail-on medium
       - run: |
-          helm template ko deploy/helm/kubeoracle --set replicaCount=2 --set database.url=postgresql://u:p@db/k             | kubeoracle lint - --fail-on medium
+          helm template ko deploy/helm/kubesift --set replicaCount=2 --set database.url=postgresql://u:p@db/k             | kubesift lint - --fail-on medium
       - name: Two replicas without a shared database must be rejected
         run: |
-          if helm template ko deploy/helm/kubeoracle --set replicaCount=2 >/dev/null 2>&1; then
+          if helm template ko deploy/helm/kubesift --set replicaCount=2 >/dev/null 2>&1; then
             echo "expected a validation error"; exit 1
           fi
 
@@ -76,9 +76,9 @@ jobs:
         with:
           context: .
           push: false
-          tags: kubeoracle:ci
+          tags: kubesift:ci
           load: true
-      - run: docker run --rm kubeoracle:ci version
+      - run: docker run --rm kubesift:ci version
 
   e2e:
     runs-on: ubuntu-latest
@@ -91,9 +91,9 @@ jobs:
       - run: pip install -e .
       - uses: helm/kind-action@v1
         with:
-          cluster_name: kubeoracle-e2e
+          cluster_name: kubesift-e2e
       - name: Break the cluster on purpose and check every failure is explained
-        run: CLUSTER=kubeoracle-e2e ./scripts/e2e.sh
+        run: CLUSTER=kubesift-e2e ./scripts/e2e.sh
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -109,35 +109,35 @@ jobs:
       - uses: azure/setup-helm@v4
       - uses: helm/kind-action@v1
         with:
-          cluster_name: kubeoracle-deploy
+          cluster_name: kubesift-deploy
       - name: Build the image and load it into kind
         run: |
-          docker build -t ghcr.io/opeyemiadeniji/kubeoracle:ci .
-          kind load docker-image ghcr.io/opeyemiadeniji/kubeoracle:ci --name kubeoracle-deploy
+          docker build -t ghcr.io/opeyemiadeniji/kubesift:ci .
+          kind load docker-image ghcr.io/opeyemiadeniji/kubesift:ci --name kubesift-deploy
       - name: Single replica
         run: |
-          helm install ko deploy/helm/kubeoracle -n kubeoracle --create-namespace             --set image.tag=ci --set image.pullPolicy=Never --set scan.interval=30 --wait --timeout 3m
-          kubectl -n kubeoracle port-forward svc/ko-kubeoracle 8080:80 & sleep 5
-          TOKEN=$(kubectl -n kubeoracle get secret ko-kubeoracle -o jsonpath='{.data.api-token}' | base64 -d)
+          helm install ko deploy/helm/kubesift -n kubesift --create-namespace             --set image.tag=ci --set image.pullPolicy=Never --set scan.interval=30 --wait --timeout 3m
+          kubectl -n kubesift port-forward svc/ko-kubesift 8080:80 & sleep 5
+          TOKEN=$(kubectl -n kubesift get secret ko-kubesift -o jsonpath='{.data.api-token}' | base64 -d)
           curl -fsS localhost:8080/healthz
           curl -fsS -H "Authorization: Bearer $TOKEN" localhost:8080/api/v1/info
           code=$(curl -s -o /dev/null -w '%{http_code}' -X POST localhost:8080/mcp -H 'Content-Type: application/json' -d '{}')
           test "$code" = 401
           curl -fsS -X POST -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json'             localhost:8080/api/v1/diagnose -d '{"llm": false}' | python3 -c 'import json,sys; r=json.load(sys.stdin); print(r["cluster"], len(r["findings"]), "findings")'
           kill %1
-          helm uninstall ko -n kubeoracle --wait
+          helm uninstall ko -n kubesift --wait
       - name: Two replicas with PostgreSQL and leader election
         run: |
-          kubectl -n kubeoracle create deployment pg --image=postgres:16-alpine --port=5432
-          kubectl -n kubeoracle set env deployment/pg POSTGRES_PASSWORD=pw POSTGRES_DB=kubeoracle
-          kubectl -n kubeoracle expose deployment pg --port=5432
-          kubectl -n kubeoracle rollout status deployment/pg --timeout=120s
-          helm install ko deploy/helm/kubeoracle -n kubeoracle --set image.tag=ci --set image.pullPolicy=Never             --set replicaCount=2 --set database.url=postgresql://postgres:pw@pg:5432/kubeoracle             --set scan.interval=30 --wait --timeout 4m
-          kubectl -n kubeoracle get pods -o wide
+          kubectl -n kubesift create deployment pg --image=postgres:16-alpine --port=5432
+          kubectl -n kubesift set env deployment/pg POSTGRES_PASSWORD=pw POSTGRES_DB=kubesift
+          kubectl -n kubesift expose deployment pg --port=5432
+          kubectl -n kubesift rollout status deployment/pg --timeout=120s
+          helm install ko deploy/helm/kubesift -n kubesift --set image.tag=ci --set image.pullPolicy=Never             --set replicaCount=2 --set database.url=postgresql://postgres:pw@pg:5432/kubesift             --set scan.interval=30 --wait --timeout 4m
+          kubectl -n kubesift get pods -o wide
           # The lease must end up held by one of the running replicas (a previous holder may need to expire).
-          pods=$(kubectl -n kubeoracle get pods -l app.kubernetes.io/name=kubeoracle -o jsonpath='{.items[*].metadata.name}')
+          pods=$(kubectl -n kubesift get pods -l app.kubernetes.io/name=kubesift -o jsonpath='{.items[*].metadata.name}')
           for i in $(seq 1 30); do
-            holder=$(kubectl -n kubeoracle get lease kubeoracle-scanner -o jsonpath='{.spec.holderIdentity}' 2>/dev/null || true)
+            holder=$(kubectl -n kubesift get lease kubesift-scanner -o jsonpath='{.spec.holderIdentity}' 2>/dev/null || true)
             if [ -n "$holder" ] && echo " $pods " | grep -q " $holder "; then break; fi
             sleep 3
           done
@@ -145,13 +145,13 @@ jobs:
           echo " $pods " | grep -q " $holder "
       - name: Killing the leader hands over to the other replica
         run: |
-          old=$(kubectl -n kubeoracle get lease kubeoracle-scanner -o jsonpath='{.spec.holderIdentity}')
-          kubectl -n kubeoracle delete pod "$old" --wait=false
+          old=$(kubectl -n kubesift get lease kubesift-scanner -o jsonpath='{.spec.holderIdentity}')
+          kubectl -n kubesift delete pod "$old" --wait=false
           for i in $(seq 1 30); do
-            holder=$(kubectl -n kubeoracle get lease kubeoracle-scanner -o jsonpath='{.spec.holderIdentity}')
+            holder=$(kubectl -n kubesift get lease kubesift-scanner -o jsonpath='{.spec.holderIdentity}')
             if [ -n "$holder" ] && [ "$holder" != "$old" ]; then echo "failover: $old -> $holder after ~$((i*2))s"; exit 0; fi
             sleep 2
           done
           echo "no failover"; exit 1
       - if: failure()
-        run: kubectl -n kubeoracle logs -l app.kubernetes.io/name=kubeoracle --tail=100 --prefix || true
+        run: kubectl -n kubesift logs -l app.kubernetes.io/name=kubesift --tail=100 --prefix || true

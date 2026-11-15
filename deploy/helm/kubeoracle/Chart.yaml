@@ -1,8 +1,0 @@
-apiVersion: v2
-name: kubeoracle
-description: Evidence-based Kubernetes troubleshooting service (dashboard, API, Alertmanager receiver, background scans)
-type: application
-version: 2.0.0
-appVersion: "2.0.0"
-home: https://github.com/OpeyemiAdeniji/KubeOracle
-keywords: [kubernetes, troubleshooting, sre, observability]

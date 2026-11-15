@@ -1,8 +1,8 @@
 import json
 
-from kubeoracle.lint import lint, lint_text
-from kubeoracle.redact import redact
-from kubeoracle.report import to_sarif
+from kubesift.lint import lint, lint_text
+from kubesift.redact import redact
+from kubesift.report import to_sarif
 
 BAD = """
 apiVersion: batch/v1beta1

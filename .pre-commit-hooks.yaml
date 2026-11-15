@@ -1,7 +1,7 @@
-- id: kubeoracle-lint
-  name: KubeOracle manifest lint
+- id: kubesift-lint
+  name: KubeSift manifest lint
   description: Check Kubernetes YAML for reliability, security and removed-API problems
-  entry: kubeoracle lint
+  entry: kubesift lint
   language: python
   files: \.(ya?ml)$
   args: [--fail-on, high]

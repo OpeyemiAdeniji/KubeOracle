@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>KubeOracle — know why Kubernetes broke, not just that it broke</title>
-<meta name="description" content="Open-source Kubernetes troubleshooting. KubeOracle finds what's broken, links it to the change that caused it, and gives you the fix — from your terminal, your AI assistant, CI, or a dashboard in your cluster.">
-<meta property="og:title" content="KubeOracle — know why Kubernetes broke">
+<title>KubeSift — know why Kubernetes broke, not just that it broke</title>
+<meta name="description" content="Open-source Kubernetes troubleshooting. KubeSift finds what's broken, links it to the change that caused it, and gives you the fix — from your terminal, your AI assistant, CI, or a dashboard in your cluster.">
+<meta property="og:title" content="KubeSift — know why Kubernetes broke">
 <meta property="og:description" content="60 evidence-based checks, change correlation and rollback commands. CLI, kubectl plugin, MCP server and Helm chart. Free and open source.">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary">
@@ -16,7 +16,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 <script>
-  try { const t = localStorage.getItem("ko-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+  try { const t = localStorage.getItem("ks-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
 </script>
 </head>
 <body>
@@ -24,22 +24,22 @@
 
 <header class="nav" id="top">
   <div class="wrap nav-inner">
-    <a class="brand" href="#top" aria-label="KubeOracle home">
-      <img src="favicon.svg" alt="" width="28" height="28"><span>KubeOracle</span>
+    <a class="brand" href="#top" aria-label="KubeSift home">
+      <img src="favicon.svg" alt="" width="28" height="28"><span>KubeSift</span>
     </a>
     <nav class="links" aria-label="Main">
       <a href="#how">How it works</a>
       <a href="#ways">Ways to use</a>
       <a href="#catches">What it catches</a>
       <a href="#trust">Trust</a>
-      <a href="https://github.com/OpeyemiAdeniji/KubeOracle/tree/main/docs">Docs</a>
+      <a href="https://github.com/OpeyemiAdeniji/KubeSift/tree/main/docs">Docs</a>
     </nav>
     <div class="nav-actions">
       <button class="icon-btn" id="theme" type="button" aria-label="Toggle light and dark theme">
         <svg class="sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.5"/><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3M4.6 4.6l2.1 2.1M17.3 17.3l2.1 2.1M4.6 19.4l2.1-2.1M17.3 6.7l2.1-2.1"/></svg>
         <svg class="moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11Z"/></svg>
       </button>
-      <a class="btn btn-ghost gh" href="https://github.com/OpeyemiAdeniji/KubeOracle">
+      <a class="btn btn-ghost gh" href="https://github.com/OpeyemiAdeniji/KubeSift">
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38v-1.34c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.05-.49.05-.49.81.06 1.23.83 1.23.83.72 1.23 1.88.87 2.34.67.07-.52.28-.87.51-1.07-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 8 0Z"/></svg>
         <span>GitHub</span>
       </a>
@@ -50,8 +50,8 @@
   </div>
   <div class="mobile-menu" id="mobile-menu" hidden>
     <a href="#how">How it works</a><a href="#ways">Ways to use</a><a href="#catches">What it catches</a>
-    <a href="#trust">Trust</a><a href="https://github.com/OpeyemiAdeniji/KubeOracle/tree/main/docs">Docs</a>
-    <a href="https://github.com/OpeyemiAdeniji/KubeOracle">GitHub</a>
+    <a href="#trust">Trust</a><a href="https://github.com/OpeyemiAdeniji/KubeSift/tree/main/docs">Docs</a>
+    <a href="https://github.com/OpeyemiAdeniji/KubeSift">GitHub</a>
   </div>
 </header>
 
@@ -63,33 +63,33 @@
   <div class="wrap hero-inner">
     <p class="pill"><span class="dot"></span>Open source · Apache-2.0 · Works without AI</p>
     <h1>Know <em>why</em> it broke.<br>Not just <span class="strike">that</span> it broke.</h1>
-    <p class="lede">KubeOracle finds what's failing in your Kubernetes cluster, links it to the change that caused it,
+    <p class="lede">KubeSift finds what's failing in your Kubernetes cluster, links it to the change that caused it,
       and hands you the fix — from your terminal, your AI assistant, your CI, or a dashboard in the cluster.</p>
 
     <div class="install" data-tabs>
       <div class="tabs" role="tablist" aria-label="Install method">
-        <button role="tab" aria-selected="true" data-cmd="pipx install &quot;kubeoracle[all]&quot;">pipx</button>
-        <button role="tab" aria-selected="false" data-cmd="kubectl oracle diagnose -n shop">kubectl</button>
-        <button role="tab" aria-selected="false" data-cmd="helm install kubeoracle oci://ghcr.io/opeyemiadeniji/charts/kubeoracle -n kubeoracle --create-namespace">Helm</button>
-        <button role="tab" aria-selected="false" data-cmd="claude mcp add kubeoracle -- kubeoracle mcp">MCP</button>
+        <button role="tab" aria-selected="true" data-cmd="pipx install &quot;kubesift[all]&quot;">pipx</button>
+        <button role="tab" aria-selected="false" data-cmd="kubectl sift diagnose -n shop">kubectl</button>
+        <button role="tab" aria-selected="false" data-cmd="helm install kubesift oci://ghcr.io/opeyemiadeniji/charts/kubesift -n kubesift --create-namespace">Helm</button>
+        <button role="tab" aria-selected="false" data-cmd="claude mcp add kubesift -- kubesift mcp">MCP</button>
       </div>
       <div class="cmd">
-        <code><span class="prompt">$</span> <span id="cmd-text">pipx install "kubeoracle[all]"</span></code>
+        <code><span class="prompt">$</span> <span id="cmd-text">pipx install "kubesift[all]"</span></code>
         <button class="copy" type="button" data-copy-target="cmd-text" aria-label="Copy command">Copy</button>
       </div>
     </div>
 
     <div class="cta-row">
-      <a class="btn btn-primary" href="https://github.com/OpeyemiAdeniji/KubeOracle">Star on GitHub</a>
+      <a class="btn btn-primary" href="https://github.com/OpeyemiAdeniji/KubeSift">Star on GitHub</a>
       <a class="btn btn-ghost" href="#how">See how it works →</a>
     </div>
 
     <!-- Animated terminal -->
-    <div class="terminal" aria-label="Example: KubeOracle diagnosing a broken deployment">
-      <div class="term-bar"><span></span><span></span><span></span><p>~/clusters/prod — kubectl oracle</p></div>
+    <div class="terminal" aria-label="Example: KubeSift diagnosing a broken deployment">
+      <div class="term-bar"><span></span><span></span><span></span><p>~/clusters/prod — kubectl sift</p></div>
       <pre class="term-body" id="term" aria-live="off"></pre>
       <noscript>
-        <pre class="term-body">$ kubectl oracle diagnose -n shop
+        <pre class="term-body">$ kubectl sift diagnose -n shop
 Diagnosis: Deployment/shop/checkout is crash looping — it expects DATABASE_URL, removed in revision 2.
 $ kubectl rollout undo deployment/checkout -n shop --to-revision=1</pre>
       </noscript>
@@ -123,7 +123,7 @@ $ kubectl rollout undo deployment/checkout -n shop --to-revision=1</pre>
   <div class="wrap">
     <p class="eyebrow">How it works</p>
     <h2>From "something's down" to the fix, in one command.</h2>
-    <p class="sub">Most tools tell you a pod is crashing. KubeOracle tells you which deploy broke it, what changed, and how to undo it.</p>
+    <p class="sub">Most tools tell you a pod is crashing. KubeSift tells you which deploy broke it, what changed, and how to undo it.</p>
 
     <div class="steps">
       <article class="step reveal">
@@ -177,26 +177,26 @@ $ kubectl rollout undo deployment/checkout -n shop --to-revision=1</pre>
         <span class="way-tag">01 · Terminal</span>
         <h3>CLI &amp; kubectl plugin</h3>
         <p>Diagnose, ask questions in plain English, see recent changes, audit for production, check upgrades and cost.</p>
-        <pre><code><span class="c">$</span> kubectl oracle diagnose -n shop -v
-<span class="c">$</span> kubectl oracle ask "why is checkout failing?"
-<span class="c">$</span> kubectl oracle changes --since 2h
-<span class="c">$</span> kubectl oracle upgrade-check --target 1.36</code></pre>
+        <pre><code><span class="c">$</span> kubectl sift diagnose -n shop -v
+<span class="c">$</span> kubectl sift ask "why is checkout failing?"
+<span class="c">$</span> kubectl sift changes --since 2h
+<span class="c">$</span> kubectl sift upgrade-check --target 1.36</code></pre>
       </article>
       <article class="way reveal">
         <span class="way-tag">02 · AI assistants</span>
         <h3>MCP server</h3>
-        <p>Give Claude Code, Cursor or VS Code structured cluster evidence. Your assistant reasons; KubeOracle supplies facts.</p>
-        <pre><code><span class="c">$</span> claude mcp add kubeoracle -- kubeoracle mcp
+        <p>Give Claude Code, Cursor or VS Code structured cluster evidence. Your assistant reasons; KubeSift supplies facts.</p>
+        <pre><code><span class="c">$</span> claude mcp add kubesift -- kubesift mcp
 <span class="g"># or the shared, token-protected endpoint</span>
-https://kubeoracle.your-co.com/mcp</code></pre>
+https://kubesift.your-co.com/mcp</code></pre>
       </article>
       <article class="way reveal">
         <span class="way-tag">03 · In the cluster</span>
         <h3>Dashboard, API &amp; alerts</h3>
         <p>Helm chart with a web dashboard, REST API, Alertmanager receiver and background scans that post the diagnosis
           to Slack or Teams before anyone opens a laptop.</p>
-        <pre><code><span class="c">$</span> helm install kubeoracle \
-    oci://ghcr.io/opeyemiadeniji/charts/kubeoracle \
+        <pre><code><span class="c">$</span> helm install kubesift \
+    oci://ghcr.io/opeyemiadeniji/charts/kubesift \
     --set notifications.slackWebhookUrl=$SLACK</code></pre>
       </article>
       <article class="way reveal">
@@ -204,7 +204,7 @@ https://kubeoracle.your-co.com/mcp</code></pre>
         <h3>Stop it before it ships</h3>
         <p>Lint manifests, Helm charts and Kustomize output on every pull request. Results land in GitHub code scanning (SARIF).</p>
         <pre><code><span class="g"># .github/workflows/k8s.yml</span>
-- uses: OpeyemiAdeniji/KubeOracle@v2
+- uses: OpeyemiAdeniji/KubeSift@v2
   with:
     paths: k8s/
     target-version: "1.36"</code></pre>
@@ -219,9 +219,9 @@ https://kubeoracle.your-co.com/mcp</code></pre>
     <p class="eyebrow">In-cluster dashboard</p>
     <h2>Incidents, not alerts.</h2>
     <p class="sub">Pods on a dead node become one infrastructure incident. A bad rollout and its crashing pods become one app incident.</p>
-    <div class="dash reveal" role="img" aria-label="Mock-up of the KubeOracle dashboard showing incidents, recent changes and counts">
+    <div class="dash reveal" role="img" aria-label="Mock-up of the KubeSift dashboard showing incidents, recent changes and counts">
       <div class="dash-side">
-        <div class="dash-brand"><img src="favicon.svg" alt="" width="18" height="18"> KubeOracle</div>
+        <div class="dash-brand"><img src="favicon.svg" alt="" width="18" height="18"> KubeSift</div>
         <span class="on">Diagnose</span><span>Ask</span><span>Changes</span><span>Cost</span><span>Upgrade</span><span>Lint</span><span>History</span>
       </div>
       <div class="dash-main">
@@ -265,7 +265,7 @@ https://kubeoracle.your-co.com/mcp</code></pre>
       <article class="catch reveal"><h3>Cost</h3><p>Over-requested CPU and memory with right-sizing from real usage, idle GPUs, unused volumes, load balancers with no backends.</p></article>
       <article class="catch reveal"><h3>Security &amp; reliability</h3><p>Privileged containers, secrets in plain env vars, cluster-admin service accounts, single replicas, missing probes and limits.</p></article>
     </div>
-    <p class="center more"><a class="link" href="https://github.com/OpeyemiAdeniji/KubeOracle/blob/main/docs/checks.md">See all 60 checks →</a></p>
+    <p class="center more"><a class="link" href="https://github.com/OpeyemiAdeniji/KubeSift/blob/main/docs/checks.md">See all 60 checks →</a></p>
   </div>
 </section>
 
@@ -291,12 +291,12 @@ https://kubeoracle.your-co.com/mcp</code></pre>
     <h2>Your next incident deserves a head start.</h2>
     <p>Free, open source, and ready for your cluster in under a minute.</p>
     <div class="cmd cmd-lg">
-      <code><span class="prompt">$</span> <span id="final-cmd">pipx install "kubeoracle[all]" &amp;&amp; kubectl oracle doctor</span></code>
+      <code><span class="prompt">$</span> <span id="final-cmd">pipx install "kubesift[all]" &amp;&amp; kubectl sift doctor</span></code>
       <button class="copy" type="button" data-copy-target="final-cmd" aria-label="Copy command">Copy</button>
     </div>
     <div class="cta-row">
-      <a class="btn btn-primary" href="https://github.com/OpeyemiAdeniji/KubeOracle">Get started on GitHub</a>
-      <a class="btn btn-ghost" href="https://github.com/OpeyemiAdeniji/KubeOracle/blob/main/docs/production.md">Production guide</a>
+      <a class="btn btn-primary" href="https://github.com/OpeyemiAdeniji/KubeSift">Get started on GitHub</a>
+      <a class="btn btn-ghost" href="https://github.com/OpeyemiAdeniji/KubeSift/blob/main/docs/production.md">Production guide</a>
     </div>
   </div>
 </section>
@@ -305,13 +305,13 @@ https://kubeoracle.your-co.com/mcp</code></pre>
 
 <footer class="footer">
   <div class="wrap foot-inner">
-    <div class="brand"><img src="favicon.svg" alt="" width="22" height="22"><span>KubeOracle</span></div>
+    <div class="brand"><img src="favicon.svg" alt="" width="22" height="22"><span>KubeSift</span></div>
     <nav aria-label="Footer">
-      <a href="https://github.com/OpeyemiAdeniji/KubeOracle">GitHub</a>
-      <a href="https://github.com/OpeyemiAdeniji/KubeOracle/tree/main/docs">Docs</a>
-      <a href="https://github.com/OpeyemiAdeniji/KubeOracle/blob/main/docs/mcp.md">MCP setup</a>
-      <a href="https://github.com/OpeyemiAdeniji/KubeOracle/blob/main/SECURITY.md">Security</a>
-      <a href="https://github.com/OpeyemiAdeniji/KubeOracle/blob/main/LICENSE">Apache-2.0</a>
+      <a href="https://github.com/OpeyemiAdeniji/KubeSift">GitHub</a>
+      <a href="https://github.com/OpeyemiAdeniji/KubeSift/tree/main/docs">Docs</a>
+      <a href="https://github.com/OpeyemiAdeniji/KubeSift/blob/main/docs/mcp.md">MCP setup</a>
+      <a href="https://github.com/OpeyemiAdeniji/KubeSift/blob/main/SECURITY.md">Security</a>
+      <a href="https://github.com/OpeyemiAdeniji/KubeSift/blob/main/LICENSE">Apache-2.0</a>
     </nav>
     <p class="muted small">Built by Opeyemi Adeniji. ¹ <a href="https://komodor.com/blog/komodor-2025-enterprise-kubernetes-report-finds-nearly-80-of-production-outages/">Komodor 2025 Enterprise Kubernetes Report</a>.</p>
   </div>

@@ -1,4 +1,4 @@
-"""Behaviour that matters when KubeOracle runs as a long-lived service or on big clusters."""
+"""Behaviour that matters when KubeSift runs as a long-lived service or on big clusters."""
 
 import time
 from collections import defaultdict
@@ -6,8 +6,8 @@ from datetime import timedelta
 
 from fixtures import container, deployment, event, m, pod, rs
 
-from kubeoracle.analysis.engine import investigate
-from kubeoracle.cluster.snapshot import Snapshot
+from kubesift.analysis.engine import investigate
+from kubesift.cluster.snapshot import Snapshot
 
 
 def big_cluster(namespaces=100, per_ns=50) -> Snapshot:
@@ -44,7 +44,7 @@ def test_large_cluster_is_fast(settings):
 
 
 def test_history_retention(settings, snap):
-    from kubeoracle.store import Store
+    from kubesift.store import Store
 
     store = Store(settings.data_dir)
     report = investigate(settings, snap, use_llm=False)
@@ -58,7 +58,7 @@ def test_history_retention(settings, snap):
 def test_server_cache_and_alert_cooldown(settings, snap, monkeypatch):
     from fastapi.testclient import TestClient
 
-    from kubeoracle.server import app as server_app
+    from kubesift.server import app as server_app
 
     calls = []
 

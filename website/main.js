@@ -1,4 +1,4 @@
-// KubeOracle site interactions: theme, menu, install tabs, copy, animated terminal, reveals, counters.
+// KubeSift site interactions: theme, menu, install tabs, copy, animated terminal, reveals, counters.
 (() => {
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -10,7 +10,7 @@
     const isLight = root.dataset.theme === "light" ||
       (!root.dataset.theme && window.matchMedia("(prefers-color-scheme: light)").matches);
     root.dataset.theme = isLight ? "dark" : "light";
-    try { localStorage.setItem("ko-theme", root.dataset.theme); } catch (e) {}
+    try { localStorage.setItem("ks-theme", root.dataset.theme); } catch (e) {}
   });
 
   // Mobile menu
@@ -50,10 +50,10 @@
     setTimeout(() => { btn.textContent = "Copy"; btn.classList.remove("done"); }, 1800);
   }));
 
-  // Animated terminal: a real-looking KubeOracle diagnosis
+  // Animated terminal: a real-looking KubeSift diagnosis
   const term = $("#term");
   const script = [
-    { type: "cmd", text: "kubectl oracle diagnose -n shop" },
+    { type: "cmd", text: "kubectl sift diagnose -n shop" },
     { type: "out", html: '<span class="t-dim">Reading cluster state… 412 objects · 3 failing containers · logs collected</span>', delay: 500 },
     { type: "out", html: '<span class="t-dim">Running 60 checks · correlating 9 changes in the last 6h</span>', delay: 450 },
     { type: "out", html: "", delay: 250 },

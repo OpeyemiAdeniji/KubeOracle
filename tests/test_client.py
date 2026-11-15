@@ -50,7 +50,7 @@ def fake_api(tmp_path):
             if url.path == "/api/v1/secrets":
                 return self._send(403, {"message": "forbidden"})
             plural = url.path.rstrip("/").rsplit("/", 1)[-1]
-            from kubeoracle.cluster.snapshot import KINDS
+            from kubesift.cluster.snapshot import KINDS
             key = next((k for k, _, _, p, _, _ in KINDS if p == plural), None)
             if key is None or key not in snap.objects:
                 return self._send(404, {"message": "not found"})
@@ -78,8 +78,8 @@ def fake_api(tmp_path):
 
 
 def test_collect_against_api(fake_api, settings):
-    from kubeoracle.analysis.engine import investigate, snapshot_for
-    from kubeoracle.cluster.client import list_contexts
+    from kubesift.analysis.engine import investigate, snapshot_for
+    from kubesift.cluster.client import list_contexts
 
     kubeconfig, seen = fake_api
     settings.kubeconfig = kubeconfig
@@ -104,9 +104,9 @@ def test_collect_against_api(fake_api, settings):
 
 
 def test_fix_dry_run_and_patch(fake_api, settings):
-    from kubeoracle.cluster.client import KubeClient
-    from kubeoracle.remediate import execute, plan
-    from kubeoracle.store import Store
+    from kubesift.cluster.client import KubeClient
+    from kubesift.remediate import execute, plan
+    from kubesift.store import Store
 
     kubeconfig, seen = fake_api
     client = KubeClient(kubeconfig=kubeconfig)

@@ -1,6 +1,6 @@
-"""Assert that `kubeoracle diagnose -o json` found every problem the test scenarios create.
+"""Assert that `kubesift diagnose -o json` found every problem the test scenarios create.
 
-Usage: kubeoracle diagnose -n default --no-llm -o json > report.json
+Usage: kubesift diagnose -n default --no-llm -o json > report.json
        python scripts/e2e_check.py report.json test-scenarios/expected.json
 """
 

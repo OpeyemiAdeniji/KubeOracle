@@ -7,8 +7,8 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from fixtures import container, deployment, event, m, pod, ts
 
-from kubeoracle.checks import run_checks
-from kubeoracle.cluster.snapshot import Snapshot
+from kubesift.checks import run_checks
+from kubesift.cluster.snapshot import Snapshot
 
 
 def make(**objects) -> Snapshot:
@@ -79,8 +79,8 @@ def test_platform_events(settings):
 def test_notify_slack(settings):
     from fixtures import broken_cluster
 
-    from kubeoracle import notify
-    from kubeoracle.analysis.engine import investigate
+    from kubesift import notify
+    from kubesift.analysis.engine import investigate
 
     got = []
 
@@ -108,7 +108,7 @@ def test_notify_slack(settings):
 def test_runbooks(tmp_path, settings):
     from fixtures import broken_cluster
 
-    from kubeoracle.analysis.engine import investigate
+    from kubesift.analysis.engine import investigate
 
     (tmp_path / "rb.yaml").write_text(
         "- title: API OOM playbook\n  match: {check: pod-oomkilled, namespace: shop, name: '^api$'}\n"

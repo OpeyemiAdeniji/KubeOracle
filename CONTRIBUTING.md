@@ -12,7 +12,7 @@ ruff check src tests
 
 ## Adding a check
 
-1. Pick the module in `src/kubeoracle/checks/` that matches the area (pods, workloads, network, nodes,
+1. Pick the module in `src/kubesift/checks/` that matches the area (pods, workloads, network, nodes,
    storage, events, hygiene, lifecycle, config_refs).
 2. Write a function decorated with `@check(...)`:
 
@@ -27,7 +27,7 @@ ruff check src tests
                                  remediation="What to do.", commands=["kubectl ..."])
    ```
 
-   - `live_only=False` if it only needs specs (it will then also run in `kubeoracle lint`).
+   - `live_only=False` if it only needs specs (it will then also run in `kubesift lint`).
    - `risk=True` if it describes something that will hurt later rather than something broken now.
 3. Add a case to `tests/fixtures.py` and a test in `tests/test_checks.py`.
 4. Run `python scripts/gen_check_docs.py` to update `docs/checks.md`.

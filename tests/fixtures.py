@@ -9,7 +9,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from kubeoracle.cluster.snapshot import Snapshot
+from kubesift.cluster.snapshot import Snapshot
 
 NOW = datetime.now(timezone.utc)
 
@@ -83,7 +83,7 @@ def tls_secret(name: str, days_left: int, ns: str = "shop") -> dict:
     from cryptography.hazmat.primitives.asymmetric import ec
     from cryptography.x509.oid import NameOID
 
-    from kubeoracle.cluster.snapshot import _sanitize_secret
+    from kubesift.cluster.snapshot import _sanitize_secret
 
     key = ec.generate_private_key(ec.SECP256R1())
     subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "shop.example.com")])
@@ -121,7 +121,7 @@ def node(name: str, ready: bool = True, **info: Any) -> dict:
 
 
 def broken_cluster() -> Snapshot:
-    from kubeoracle.cluster.snapshot import _helm_releases, _sanitize_secret
+    from kubesift.cluster.snapshot import _helm_releases, _sanitize_secret
 
     o: dict[str, list[dict]] = defaultdict(list)
     o["nodes"] += [node("node-1"), node("node-2", ready=False), node("node-3", runtime="containerd://1.7.20", kubelet="v1.31.0")]

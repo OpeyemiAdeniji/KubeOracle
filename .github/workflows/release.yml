@@ -20,7 +20,7 @@ jobs:
           python-version: "3.12"
       - name: Check the tag matches the package version
         run: |
-          v=$(python -c "import re;print(re.search(r'__version__ = \"(.+)\"', open('src/kubeoracle/__init__.py').read())[1])")
+          v=$(python -c "import re;print(re.search(r'__version__ = \"(.+)\"', open('src/kubesift/__init__.py').read())[1])")
           test "v$v" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME != version $v"; exit 1; }
       - run: pip install build && python -m build
       # Publishes with PEP 740 attestations (signed provenance) automatically.
@@ -47,7 +47,7 @@ jobs:
       - id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository_owner }}/kubeoracle
+          images: ghcr.io/${{ github.repository_owner }}/kubesift
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
@@ -81,11 +81,11 @@ jobs:
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u "${{ github.actor }}" --password-stdin
           echo "${{ secrets.GITHUB_TOKEN }}" | cosign login ghcr.io -u "${{ github.actor }}" --password-stdin
-          helm package deploy/helm/kubeoracle
-          out=$(helm push kubeoracle-*.tgz oci://ghcr.io/${{ github.repository_owner }}/charts 2>&1)
+          helm package deploy/helm/kubesift
+          out=$(helm push kubesift-*.tgz oci://ghcr.io/${{ github.repository_owner }}/charts 2>&1)
           echo "$out"
           digest=$(echo "$out" | awk '/Digest:/ {print $2}')
-          cosign sign --yes "ghcr.io/${{ github.repository_owner }}/charts/kubeoracle@${digest}"
+          cosign sign --yes "ghcr.io/${{ github.repository_owner }}/charts/kubesift@${digest}"
 
   github-release:
     runs-on: ubuntu-latest

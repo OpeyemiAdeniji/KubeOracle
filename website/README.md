@@ -1,4 +1,4 @@
-# KubeOracle website
+# KubeSift website
 
 Static site, no build step: `index.html`, `styles.css`, `main.js`, `favicon.svg`.
 

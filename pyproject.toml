@@ -3,7 +3,7 @@ requires = ["hatchling>=1.25"]
 build-backend = "hatchling.build"
 
 [project]
-name = "kubeoracle"
+name = "kubesift"
 dynamic = ["version"]
 description = "Kubernetes troubleshooting that explains itself: evidence-based diagnosis, change correlation, cost and upgrade checks. CLI, kubectl plugin, MCP server and in-cluster service."
 readme = "README.md"
@@ -37,22 +37,22 @@ server = ["fastapi>=0.110", "uvicorn[standard]>=0.29"]
 mcp = ["mcp>=2,<3"]
 anthropic = ["anthropic>=2.8"]
 postgres = ["psycopg[binary]>=3.1"]
-all = ["kubeoracle[server,mcp,anthropic,postgres]"]
-dev = ["kubeoracle[all]", "pytest>=8", "ruff>=0.6", "pytest-cov>=5"]
+all = ["kubesift[server,mcp,anthropic,postgres]"]
+dev = ["kubesift[all]", "pytest>=8", "ruff>=0.6", "pytest-cov>=5"]
 
 [project.scripts]
-kubeoracle = "kubeoracle.cli:main"
-kubectl-oracle = "kubeoracle.cli:main"
+kubesift = "kubesift.cli:main"
+kubectl-sift = "kubesift.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/OpeyemiAdeniji/KubeOracle"
-Issues = "https://github.com/OpeyemiAdeniji/KubeOracle/issues"
+Homepage = "https://github.com/OpeyemiAdeniji/KubeSift"
+Issues = "https://github.com/OpeyemiAdeniji/KubeSift/issues"
 
 [tool.hatch.version]
-path = "src/kubeoracle/__init__.py"
+path = "src/kubesift/__init__.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/kubeoracle"]
+packages = ["src/kubesift"]
 
 [tool.ruff]
 line-length = 110

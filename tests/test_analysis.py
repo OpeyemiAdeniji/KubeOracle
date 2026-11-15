@@ -1,9 +1,9 @@
 from datetime import timedelta
 
-from kubeoracle.analysis import engine
-from kubeoracle.analysis.changes import detect_changes
-from kubeoracle.analysis.engine import ask, investigate
-from kubeoracle.analysis.llm import Provider
+from kubesift.analysis import engine
+from kubesift.analysis.changes import detect_changes
+from kubesift.analysis.engine import ask, investigate
+from kubesift.analysis.llm import Provider
 
 
 def test_changes_include_rollout_diff(snap):
@@ -72,7 +72,7 @@ def test_llm_failure_falls_back(snap, settings, monkeypatch):
         name = "broken"
 
         def complete_json(self, *a):
-            from kubeoracle.analysis.llm import LLMError
+            from kubesift.analysis.llm import LLMError
             raise LLMError("boom")
 
     monkeypatch.setattr(engine, "get_provider", lambda s: Broken())
@@ -94,7 +94,7 @@ def test_ask_general_topic(snap, settings):
 
 
 def test_notes_attached(snap, settings):
-    from kubeoracle.store import Store
+    from kubesift.store import Store
 
     store = Store(settings.data_dir)
     store.add_note("pod-oomkilled", "Raised to 512Mi; leak fixed in 3.3", target="Deployment/shop/api")
@@ -106,7 +106,7 @@ def test_notes_attached(snap, settings):
 
 
 def test_alert_dedupe(snap, settings):
-    from kubeoracle.store import Store
+    from kubesift.store import Store
 
     store = Store(settings.data_dir)
     report = investigate(settings, snap, use_llm=False)
