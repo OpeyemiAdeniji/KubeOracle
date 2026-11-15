@@ -56,12 +56,15 @@ class Settings(BaseModel):
 
     # Storage and team knowledge
     data_dir: str = str(Path.home() / ".kubeoracle")
+    database_url: str | None = Field(default=None, repr=False)  # postgresql://... to share state across replicas
     runbooks_dir: str | None = None
 
     # Server
     api_token: str | None = Field(default=None, repr=False)
     cors_origins: list[str] = Field(default_factory=list)
     allow_writes: bool = False
+    leader_election: bool = False  # several replicas: only the Lease holder runs background scans
+    leader_namespace: str | None = None  # defaults to the pod's namespace
     scan_interval: int = 0  # seconds; 0 disables background scans
     cache_ttl: int = 20  # seconds a cluster snapshot is reused by the server
     alert_cooldown: int = 600  # seconds before the same namespace is investigated again for alerts

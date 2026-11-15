@@ -3,13 +3,21 @@ image:
   tag: ""          # defaults to the chart appVersion
   pullPolicy: IfNotPresent
 
-# Keep at 1: history is stored in SQLite on a ReadWriteOnce volume.
+# 1 replica: history in a SQLite file on a volume (simple, fine for most teams).
+# 2+ replicas (high availability): set database.url (PostgreSQL). Replicas elect one leader with a
+# Kubernetes Lease to run background scans; any replica serves the dashboard, API and MCP.
 replicaCount: 1
 
-# API token for the dashboard/API. Leave empty to generate one (read it with the command in NOTES).
+database:
+  url: ""   # postgresql://user:password@host:5432/kubeoracle (stored in the chart's Secret)
+  # Or keep it in existingSecret under the key "database-url" and set:
+  fromExistingSecret: false
+
+# API token for the dashboard, API and MCP endpoint. Leave empty to generate one (see NOTES).
 apiToken: ""
 # Or reference an existing Secret with these keys:
-#   api-token, anthropic-api-key, openai-api-key, openrouter-api-key, slack-webhook-url, teams-webhook-url
+#   api-token, database-url, anthropic-api-key, openai-api-key, openrouter-api-key,
+#   slack-webhook-url, teams-webhook-url
 existingSecret: ""
 
 llm:

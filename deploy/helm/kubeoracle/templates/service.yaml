@@ -10,7 +10,7 @@ spec:
     - name: http
       port: {{ .Values.service.port }}
       targetPort: http
-{{- if .Values.persistence.enabled }}
+{{- if and .Values.persistence.enabled (not (include "kubeoracle.externalDb" .)) }}
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -73,4 +73,16 @@ spec:
   ingress:
     - ports:
         - port: 8080
+{{- end }}
+{{- if gt (int .Values.replicaCount) 1 }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "kubeoracle.name" . }}
+  labels: {{- include "kubeoracle.labels" . | nindent 4 }}
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels: {{- include "kubeoracle.selector" . | nindent 6 }}
 {{- end }}

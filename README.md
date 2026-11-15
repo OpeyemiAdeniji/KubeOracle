@@ -46,7 +46,9 @@ kubectl oracle doctor               # checks access, permissions, metrics and LL
 
 `kubeoracle` and `kubectl oracle` are the same command. It uses your kubeconfig and needs read access only.
 
-In the cluster (dashboard, API, Alertmanager receiver, background scans with Slack/Teams alerts):
+In the cluster (dashboard, API, MCP endpoint, Alertmanager receiver, background scans with Slack/Teams alerts).
+Images and charts are signed; for high availability (2+ replicas on PostgreSQL) see
+[docs/production.md](docs/production.md):
 
 ```bash
 helm install kubeoracle oci://ghcr.io/opeyemiadeniji/charts/kubeoracle -n kubeoracle --create-namespace \
@@ -112,7 +114,12 @@ and `lint` takes `-o sarif` (GitHub code scanning). `--fail-on high` makes CI fa
 ## Docs
 
 - [All checks](docs/checks.md) · [Configuration](docs/configuration.md) · [MCP setup](docs/mcp.md) ·
-  [Architecture](docs/architecture.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
+  [Production deployment](docs/production.md) · [Architecture](docs/architecture.md) ·
+  [Releasing](docs/releasing.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
+
+## License
+
+[Apache-2.0](LICENSE)
 
 ## Develop
 

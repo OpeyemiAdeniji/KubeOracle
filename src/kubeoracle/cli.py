@@ -71,10 +71,10 @@ def _snapshot(namespace: str | None, from_file: str | None = None, with_logs: bo
 
 
 def _store():
-    from kubeoracle.store import Store
+    from kubeoracle.store import open_store
 
     try:
-        return Store(state.settings.data_dir)
+        return open_store(state.settings)
     except Exception:
         return None
 
@@ -571,11 +571,18 @@ def mcp(
         from kubeoracle.mcp_server import build_server
     except ImportError:
         _fail("install the MCP extra: pip install 'kubeoracle[mcp]'")
-    server = build_server(state.settings)
+    s = state.settings
     if transport == "stdio":
-        server.run("stdio")
-    else:
-        server.run("streamable-http", host=host, port=port)
+        build_server(s).run("stdio")
+        return
+    if host not in ("127.0.0.1", "localhost") and not s.api_token:
+        _fail("refusing to serve MCP on a non-local address without KUBEORACLE_API_TOKEN")
+    import uvicorn
+
+    from kubeoracle.mcp_server import build_http_app
+    _, http_app = build_http_app(s)
+    err.print(f"MCP endpoint: http://{host}:{port}/mcp" + (" (bearer token required)" if s.api_token else ""))
+    uvicorn.run(http_app, host=host, port=port, log_level="warning")
 
 
 @app.command()

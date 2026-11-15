@@ -8,6 +8,7 @@ import logging
 import threading
 import time
 from collections import defaultdict
+from contextlib import asynccontextmanager
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
@@ -20,10 +21,11 @@ from pydantic import BaseModel, Field
 from kubeoracle import __version__, notify
 from kubeoracle.analysis.changes import detect_changes
 from kubeoracle.analysis.engine import ask, explain_resource, investigate, snapshot_for
-from kubeoracle.cluster.client import list_contexts
+from kubeoracle.cluster.client import KubeClient, list_contexts
 from kubeoracle.config import Settings
+from kubeoracle.leader import AlwaysLeader, LeaderElector, pod_namespace
 from kubeoracle.models import Report, Severity
-from kubeoracle.store import Store
+from kubeoracle.store import Store, open_store
 from kubeoracle.util import parse_duration
 
 log = logging.getLogger("kubeoracle.server")
@@ -59,11 +61,26 @@ class FixRequest(BaseModel):
 
 
 def create_app(settings: Settings) -> FastAPI:
-    app = FastAPI(title="KubeOracle", version=__version__,
+    # MCP over HTTP is served by this same process at /mcp, behind the same bearer token.
+    mcp_server = mcp_asgi = None
+    try:
+        from kubeoracle.mcp_server import build_http_app
+        mcp_server, mcp_asgi = build_http_app(settings)
+    except ImportError:
+        log.info("MCP extra not installed; /mcp disabled")
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI):
+        if mcp_server is None:
+            yield
+            return
+        async with mcp_server.session_manager.run():
+            yield
+
+    app = FastAPI(title="KubeOracle", version=__version__, lifespan=lifespan,
                   description="Evidence-based Kubernetes troubleshooting API.")
-    store = Store(settings.data_dir)
-    state: dict[str, Any] = {"last_scan": None, "last_report": None}
-    alert_seen: dict[str | None, float] = {}
+    store = open_store(settings)
+    state: dict[str, Any] = {"last_scan": None, "last_report": None, "elector": AlwaysLeader()}
     if settings.cors_origins:
         app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_methods=["GET", "POST"],
                            allow_headers=["Authorization", "Content-Type"])
@@ -110,7 +127,8 @@ def create_app(settings: Settings) -> FastAPI:
     def info() -> dict[str, Any]:
         return {"version": __version__, "llm": settings.resolved_provider(), "model": settings.resolved_model(),
                 "allow_writes": settings.allow_writes, "scan_interval": settings.scan_interval,
-                "last_scan": state["last_scan"]}
+                "last_scan": state["last_scan"], "leader": state["elector"].is_leader,
+                "storage": "postgresql" if store.postgres else "sqlite", "mcp": mcp_asgi is not None}
 
     @app.get("/api/v1/contexts", dependencies=[Depends(auth)])
     def contexts() -> dict[str, Any]:
@@ -200,13 +218,9 @@ def create_app(settings: Settings) -> FastAPI:
         firing = [a for a in payload.get("alerts") or [] if a.get("status") == "firing"]
         namespaces = sorted({(a.get("labels") or {}).get("namespace") for a in firing} - {None})
         names = ", ".join(sorted({(a.get("labels") or {}).get("alertname", "?") for a in firing}))
-        now_t = time.monotonic()
-        due = []
-        for ns in namespaces or [None]:
-            # Alert storms fire the same alert many times; investigate each namespace at most once per cooldown.
-            if now_t - alert_seen.get(ns, -1e9) >= settings.alert_cooldown:
-                alert_seen[ns] = now_t
-                due.append(ns)
+        # Alert storms fire the same alert many times; investigate each namespace at most once per cooldown.
+        # The claim lives in the database, so replicas behind one Service don't duplicate the work.
+        due = [ns for ns in namespaces or [None] if store.claim(f"alert:{ns or '*'}", settings.alert_cooldown)]
         if due:
             background.add_task(_alert_investigation, settings, store, due, names)
         return {"accepted": len(firing), "namespaces": namespaces, "investigating": due}
@@ -223,11 +237,19 @@ def create_app(settings: Settings) -> FastAPI:
                     lines.append(f'kubeoracle_findings{{severity="{sev.value}",kind="{kind}"}} {n}')
         lines += ["# HELP kubeoracle_last_scan_timestamp_seconds Unix time of the last scan",
                   "# TYPE kubeoracle_last_scan_timestamp_seconds gauge",
-                  f"kubeoracle_last_scan_timestamp_seconds {state['last_scan'] or 0}"]
+                  f"kubeoracle_last_scan_timestamp_seconds {state['last_scan'] or 0}",
+                  "# HELP kubeoracle_leader 1 if this replica runs background scans",
+                  "# TYPE kubeoracle_leader gauge",
+                  f"kubeoracle_leader {int(state['elector'].is_leader)}"]
         return PlainTextResponse("\n".join(lines) + "\n")
 
     if settings.scan_interval > 0:
+        if settings.leader_election:
+            client = KubeClient(kubeconfig=settings.kubeconfig, context=settings.context, timeout=settings.request_timeout)
+            state["elector"] = LeaderElector(client, settings.leader_namespace or pod_namespace()).start()
         threading.Thread(target=_scan_loop, args=(settings, store, state), daemon=True, name="scanner").start()
+    if mcp_asgi is not None:
+        app.mount("/", mcp_asgi)  # registered last, so the API and dashboard routes above win
     return app
 
 
@@ -254,6 +276,9 @@ def _alert_investigation_locked(settings: Settings, store: Store, namespaces: li
 def _scan_loop(settings: Settings, store: Store, state: dict[str, Any]) -> None:
     threshold = Severity.parse(settings.notify_min_severity).rank
     while True:
+        if not state["elector"].is_leader:
+            time.sleep(5)  # another replica holds the lease
+            continue
         try:
             snap = snapshot_for(settings, settings.scan_namespace)
             report = investigate(settings, snap, use_llm=False, window=timedelta(hours=1), store=store)

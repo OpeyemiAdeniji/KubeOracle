@@ -46,11 +46,11 @@ def _compact_report(report: Any, include_risks: bool) -> dict[str, Any]:
 def build_server(settings: Settings) -> MCPServer:
     from kubeoracle.analysis.changes import detect_changes
     from kubeoracle.analysis.engine import explain_resource, investigate, snapshot_for
-    from kubeoracle.store import Store
+    from kubeoracle.store import open_store
     from kubeoracle.util import parse_duration
 
     server = MCPServer(name="kubeoracle", version=__version__, instructions=INSTRUCTIONS)
-    store = Store(settings.data_dir)
+    store = open_store(settings)
 
     @server.tool(annotations=READ_ONLY)
     def diagnose(namespace: str | None = None, include_risks: bool = False, context: str | None = None) -> str:
@@ -121,3 +121,43 @@ def build_server(settings: Settings) -> MCPServer:
                                "result": execute(client, p, dry_run, store, actor="mcp")})
 
     return server
+
+
+class TokenGate:
+    """ASGI wrapper that requires `Authorization: Bearer <api_token>` on HTTP requests."""
+
+    def __init__(self, app: Any, token: str | None):
+        self.app = app
+        self.token = token
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        if scope["type"] == "http" and self.token:
+            import hmac
+
+            headers = dict(scope.get("headers") or [])
+            given = headers.get(b"authorization", b"").decode("latin-1").removeprefix("Bearer ").strip()
+            if not hmac.compare_digest(given, self.token):
+                from starlette.responses import JSONResponse
+
+                resp = JSONResponse({"detail": "invalid or missing bearer token"}, status_code=401,
+                                    headers={"WWW-Authenticate": "Bearer"})
+                await resp(scope, receive, send)
+                return
+        await self.app(scope, receive, send)
+
+
+def build_http_app(settings: Settings, path: str = "/mcp") -> tuple[MCPServer, TokenGate]:
+    """Streamable-HTTP MCP app. Stateless, so any replica behind a load balancer can answer any request."""
+    from mcp.server.transport_security import TransportSecuritySettings
+
+    server = build_server(settings)
+    # With a token, requests are authenticated, so Host checks only get in the way of ingress/port-forward.
+    # Without one (local use), keep DNS-rebinding protection on.
+    security = TransportSecuritySettings(
+        enable_dns_rebinding_protection=not settings.api_token,
+        allowed_hosts=["127.0.0.1:*", "localhost:*", "[::1]:*"],
+        allowed_origins=["http://127.0.0.1:*", "http://localhost:*"],
+    )
+    app = server.streamable_http_app(streamable_http_path=path, stateless_http=True, json_response=True,
+                                     transport_security=security)
+    return server, TokenGate(app, settings.api_token)

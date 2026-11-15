@@ -68,15 +68,18 @@ Without Prometheus, metrics-server's current usage is used (one sample; treat as
 | Name | Default | Notes |
 |---|---|---|
 | `data_dir` | `~/.kubeoracle` | SQLite: history, team notes, audit log |
+| `database_url` | none | `postgresql://...` to share state between replicas (`pip install "kubeoracle[postgres]"`) |
 | `runbooks_dir` | none | YAML runbooks attached to matching findings (see `src/kubeoracle/runbooks.py`) |
 
 ## Server
 
 | Name | Default | Notes |
 |---|---|---|
-| `api_token` | none | Required to listen on a non-local address |
+| `api_token` | none | Protects the API, Alertmanager webhook and `/mcp`; required on a non-local address |
 | `cors_origins` | none | Comma-separated |
 | `allow_writes` | `false` | Enables `/api/v1/fix` and the MCP `apply_fix` tool |
+| `leader_election` | `false` | Only the holder of the `kubeoracle-scanner` Lease runs background scans (the chart turns it on) |
+| `leader_namespace` | pod namespace | Namespace for the Lease |
 | `scan_interval` | `0` | Seconds between background scans (0 = off) |
 | `cache_ttl` | `20` | Seconds a cluster snapshot is reused across API calls |
 | `alert_cooldown` | `600` | Seconds before the same namespace is investigated again for Alertmanager alerts |

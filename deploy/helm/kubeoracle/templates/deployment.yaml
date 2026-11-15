@@ -1,4 +1,6 @@
+{{- include "kubeoracle.validate" . }}
 {{- $secret := include "kubeoracle.secretName" . }}
+{{- $externalDb := include "kubeoracle.externalDb" . }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -7,7 +9,12 @@ metadata:
 spec:
   replicas: {{ .Values.replicaCount }}
   strategy:
+    {{- if $externalDb }}
+    type: RollingUpdate
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 1}
+    {{- else }}
     type: Recreate   # single writer to the SQLite volume
+    {{- end }}
   selector:
     matchLabels: {{- include "kubeoracle.selector" . | nindent 6 }}
   template:
@@ -32,6 +39,17 @@ spec:
             - name: http
               containerPort: 8080
           env:
+            - name: POD_NAME
+              valueFrom: {fieldRef: {fieldPath: metadata.name}}
+            - name: POD_NAMESPACE
+              valueFrom: {fieldRef: {fieldPath: metadata.namespace}}
+            - name: KUBEORACLE_LEADER_ELECTION
+              value: "true"
+            {{- if $externalDb }}
+            - name: KUBEORACLE_DATABASE_URL
+              valueFrom:
+                secretKeyRef: {name: {{ $secret }}, key: database-url}
+            {{- end }}
             - name: KUBEORACLE_LLM_PROVIDER
               value: {{ .Values.llm.provider | quote }}
             {{- with .Values.llm.model }}
@@ -94,7 +112,7 @@ spec:
               mountPath: /tmp
       volumes:
         - name: data
-          {{- if .Values.persistence.enabled }}
+          {{- if and .Values.persistence.enabled (not $externalDb) }}
           persistentVolumeClaim:
             claimName: {{ include "kubeoracle.name" . }}
           {{- else }}
@@ -102,6 +120,14 @@ spec:
           {{- end }}
         - name: tmp
           emptyDir: {}
+      {{- if gt (int .Values.replicaCount) 1 }}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels: {{- include "kubeoracle.selector" . | nindent 14 }}
+      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector: {{- toYaml . | nindent 8 }}
       {{- end }}

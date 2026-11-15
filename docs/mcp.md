@@ -40,13 +40,21 @@ Add to `claude_desktop_config.json` / `.cursor/mcp.json`:
 
 ## Shared server for a team
 
-Run it once (for example in the cluster) over HTTP:
+The in-cluster service (Helm chart) serves MCP at `/mcp`, protected by the same bearer token as the API:
 
 ```bash
-kubeoracle mcp --transport streamable-http --host 0.0.0.0 --port 8765
+claude mcp add --transport http kubeoracle https://kubeoracle.example.com/mcp   --header "Authorization: Bearer $KUBEORACLE_TOKEN"
 ```
 
-Put it behind your usual authentication proxy; the MCP endpoint itself does not check tokens.
+Or run a standalone HTTP MCP server. On a non-local address it refuses to start without a token:
+
+```bash
+KUBEORACLE_API_TOKEN=... kubeoracle mcp --transport streamable-http --host 0.0.0.0 --port 8765
+# endpoint: http://<host>:8765/mcp
+```
+
+The endpoint is stateless, so it works behind a load balancer with several replicas. For single sign-on,
+put it behind oauth2-proxy (see [production.md](production.md#access-and-authentication)).
 
 ## Tools
 

@@ -76,6 +76,31 @@ subjects:
   - kind: ServiceAccount
     name: {{ include "kubeoracle.name" . }}
     namespace: {{ .Release.Namespace }}
+---
+# Leader election: only the Lease holder runs background scans and sends notifications.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "kubeoracle.name" . }}-leader
+  labels: {{- include "kubeoracle.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    verbs: [get, create, update]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "kubeoracle.name" . }}-leader
+  labels: {{- include "kubeoracle.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "kubeoracle.name" . }}-leader
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "kubeoracle.name" . }}
+    namespace: {{ .Release.Namespace }}
 {{- if .Values.rbac.allowWrites }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
