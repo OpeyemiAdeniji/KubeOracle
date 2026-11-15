@@ -1,0 +1,38 @@
+name: KubeOracle lint
+description: Check Kubernetes manifests, Helm charts and Kustomize output for reliability, security and removed-API problems.
+branding:
+  icon: shield
+  color: purple
+inputs:
+  paths:
+    description: Space-separated files or directories to lint
+    default: "."
+  target-version:
+    description: Kubernetes version to check removed APIs against (e.g. 1.36)
+    default: ""
+  fail-on:
+    description: Fail the step at or above this severity (critical, high, medium, low, none)
+    default: high
+  sarif:
+    description: Upload results to GitHub code scanning (needs security-events write permission)
+    default: "true"
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+    - shell: bash
+      run: pip install --quiet "kubeoracle @ git+https://github.com/OpeyemiAdeniji/KubeOracle@${{ github.action_ref || 'main' }}"
+    - id: lint
+      shell: bash
+      run: |
+        args=()
+        if [ -n "${{ inputs.target-version }}" ]; then args+=(--target-version "${{ inputs.target-version }}"); fi
+        kubeoracle lint ${{ inputs.paths }} "${args[@]}" -o sarif --fail-on none > kubeoracle.sarif
+        kubeoracle lint ${{ inputs.paths }} "${args[@]}" --fail-on "${{ inputs.fail-on }}"
+    - if: always() && inputs.sarif == 'true'
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: kubeoracle.sarif
+        category: kubeoracle

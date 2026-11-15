@@ -1,0 +1,80 @@
+image:
+  repository: ghcr.io/opeyemiadeniji/kubeoracle
+  tag: ""          # defaults to the chart appVersion
+  pullPolicy: IfNotPresent
+
+# 1 replica: history in a SQLite file on a volume (simple, fine for most teams).
+# 2+ replicas (high availability): set database.url (PostgreSQL). Replicas elect one leader with a
+# Kubernetes Lease to run background scans; any replica serves the dashboard, API and MCP.
+replicaCount: 1
+
+database:
+  url: ""   # postgresql://user:password@host:5432/kubeoracle (stored in the chart's Secret)
+  # Or keep it in existingSecret under the key "database-url" and set:
+  fromExistingSecret: false
+
+# API token for the dashboard, API and MCP endpoint. Leave empty to generate one (see NOTES).
+apiToken: ""
+# Or reference an existing Secret with these keys:
+#   api-token, database-url, anthropic-api-key, openai-api-key, openrouter-api-key,
+#   slack-webhook-url, teams-webhook-url
+existingSecret: ""
+
+llm:
+  provider: none     # anthropic | openai | openrouter | ollama | none
+  model: ""
+  baseUrl: ""        # e.g. http://ollama.ollama:11434/v1
+  anthropicApiKey: ""
+  openaiApiKey: ""
+  openrouterApiKey: ""
+  sendLogs: true     # false keeps log lines out of LLM prompts
+
+prometheus:
+  url: ""            # e.g. http://prometheus-operated.monitoring:9090
+
+scan:
+  interval: 300      # seconds between background scans; 0 disables
+  namespace: ""      # empty = all namespaces
+  notifyMinSeverity: high
+
+notifications:
+  slackWebhookUrl: ""
+  teamsWebhookUrl: ""
+  webhookUrl: ""
+
+rbac:
+  create: true
+  # Reading Secrets lets KubeOracle check missing secret references, TLS expiry and Helm releases.
+  # Secret VALUES are never stored or sent anywhere; only key names and certificate dates are kept.
+  readSecrets: true
+  # Allow guarded fixes (restart / rollback / scale / delete pod) from the API and MCP server.
+  allowWrites: false
+
+persistence:
+  enabled: true
+  size: 1Gi
+  storageClass: ""
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: kubeoracle.example.com
+      paths: [{path: /, pathType: Prefix}]
+  tls: []
+
+networkPolicy:
+  enabled: false
+
+resources:
+  requests: {cpu: 50m, memory: 128Mi}
+  limits: {memory: 512Mi}
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

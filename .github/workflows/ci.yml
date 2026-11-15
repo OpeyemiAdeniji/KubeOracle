@@ -1,0 +1,157 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: kubeoracle
+          POSTGRES_DB: kubeoracle
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      KUBEORACLE_TEST_DATABASE_URL: postgresql://postgres:kubeoracle@localhost:5432/kubeoracle
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - run: pip install -e ".[dev]"
+      - run: ruff check src tests
+      - run: pytest --cov=kubeoracle --cov-report=term-missing
+
+  oldest-deps:
+    # The Kubernetes client changed its low-level API in v37; keep supporting older releases.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - run: pip install -e ".[dev]" "kubernetes==31.0.0"
+      - run: pytest -q
+
+  chart:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e .
+      - run: helm lint deploy/helm/kubeoracle
+      # Dogfooding: the chart must pass KubeOracle's own checks, in both modes.
+      - run: helm template ko deploy/helm/kubeoracle | kubeoracle lint - --fail-on medium
+      - run: |
+          helm template ko deploy/helm/kubeoracle --set replicaCount=2 --set database.url=postgresql://u:p@db/k             | kubeoracle lint - --fail-on medium
+      - name: Two replicas without a shared database must be rejected
+        run: |
+          if helm template ko deploy/helm/kubeoracle --set replicaCount=2 >/dev/null 2>&1; then
+            echo "expected a validation error"; exit 1
+          fi
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: kubeoracle:ci
+          load: true
+      - run: docker run --rm kubeoracle:ci version
+
+  e2e:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e .
+      - uses: helm/kind-action@v1
+        with:
+          cluster_name: kubeoracle-e2e
+      - name: Break the cluster on purpose and check every failure is explained
+        run: CLUSTER=kubeoracle-e2e ./scripts/e2e.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-report
+          path: e2e-report.json
+
+  deploy:
+    # Install the Helm chart on a real cluster: single replica, then HA with PostgreSQL and leader election.
+    runs-on: ubuntu-latest
+    needs: [test, docker]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - uses: helm/kind-action@v1
+        with:
+          cluster_name: kubeoracle-deploy
+      - name: Build the image and load it into kind
+        run: |
+          docker build -t ghcr.io/opeyemiadeniji/kubeoracle:ci .
+          kind load docker-image ghcr.io/opeyemiadeniji/kubeoracle:ci --name kubeoracle-deploy
+      - name: Single replica
+        run: |
+          helm install ko deploy/helm/kubeoracle -n kubeoracle --create-namespace             --set image.tag=ci --set image.pullPolicy=Never --set scan.interval=30 --wait --timeout 3m
+          kubectl -n kubeoracle port-forward svc/ko-kubeoracle 8080:80 & sleep 5
+          TOKEN=$(kubectl -n kubeoracle get secret ko-kubeoracle -o jsonpath='{.data.api-token}' | base64 -d)
+          curl -fsS localhost:8080/healthz
+          curl -fsS -H "Authorization: Bearer $TOKEN" localhost:8080/api/v1/info
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST localhost:8080/mcp -H 'Content-Type: application/json' -d '{}')
+          test "$code" = 401
+          curl -fsS -X POST -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json'             localhost:8080/api/v1/diagnose -d '{"llm": false}' | python3 -c 'import json,sys; r=json.load(sys.stdin); print(r["cluster"], len(r["findings"]), "findings")'
+          kill %1
+          helm uninstall ko -n kubeoracle --wait
+      - name: Two replicas with PostgreSQL and leader election
+        run: |
+          kubectl -n kubeoracle create deployment pg --image=postgres:16-alpine --port=5432
+          kubectl -n kubeoracle set env deployment/pg POSTGRES_PASSWORD=pw POSTGRES_DB=kubeoracle
+          kubectl -n kubeoracle expose deployment pg --port=5432
+          kubectl -n kubeoracle rollout status deployment/pg --timeout=120s
+          helm install ko deploy/helm/kubeoracle -n kubeoracle --set image.tag=ci --set image.pullPolicy=Never             --set replicaCount=2 --set database.url=postgresql://postgres:pw@pg:5432/kubeoracle             --set scan.interval=30 --wait --timeout 4m
+          kubectl -n kubeoracle get pods -o wide
+          # The lease must end up held by one of the running replicas (a previous holder may need to expire).
+          pods=$(kubectl -n kubeoracle get pods -l app.kubernetes.io/name=kubeoracle -o jsonpath='{.items[*].metadata.name}')
+          for i in $(seq 1 30); do
+            holder=$(kubectl -n kubeoracle get lease kubeoracle-scanner -o jsonpath='{.spec.holderIdentity}' 2>/dev/null || true)
+            if [ -n "$holder" ] && echo " $pods " | grep -q " $holder "; then break; fi
+            sleep 3
+          done
+          echo "replicas: $pods"; echo "leader: $holder"
+          echo " $pods " | grep -q " $holder "
+      - name: Killing the leader hands over to the other replica
+        run: |
+          old=$(kubectl -n kubeoracle get lease kubeoracle-scanner -o jsonpath='{.spec.holderIdentity}')
+          kubectl -n kubeoracle delete pod "$old" --wait=false
+          for i in $(seq 1 30); do
+            holder=$(kubectl -n kubeoracle get lease kubeoracle-scanner -o jsonpath='{.spec.holderIdentity}')
+            if [ -n "$holder" ] && [ "$holder" != "$old" ]; then echo "failover: $old -> $holder after ~$((i*2))s"; exit 0; fi
+            sleep 2
+          done
+          echo "no failover"; exit 1
+      - if: failure()
+        run: kubectl -n kubeoracle logs -l app.kubernetes.io/name=kubeoracle --tail=100 --prefix || true
