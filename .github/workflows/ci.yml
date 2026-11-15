@@ -134,11 +134,24 @@ jobs:
           kubectl -n kubeoracle rollout status deployment/pg --timeout=120s
           helm install ko deploy/helm/kubeoracle -n kubeoracle --set image.tag=ci --set image.pullPolicy=Never             --set replicaCount=2 --set database.url=postgresql://postgres:pw@pg:5432/kubeoracle             --set scan.interval=30 --wait --timeout 4m
           kubectl -n kubeoracle get pods -o wide
-          for i in $(seq 1 20); do
+          # The lease must end up held by one of the running replicas (a previous holder may need to expire).
+          pods=$(kubectl -n kubeoracle get pods -l app.kubernetes.io/name=kubeoracle -o jsonpath='{.items[*].metadata.name}')
+          for i in $(seq 1 30); do
             holder=$(kubectl -n kubeoracle get lease kubeoracle-scanner -o jsonpath='{.spec.holderIdentity}' 2>/dev/null || true)
-            [ -n "$holder" ] && break; sleep 3
+            if [ -n "$holder" ] && echo " $pods " | grep -q " $holder "; then break; fi
+            sleep 3
           done
-          echo "leader: $holder"
-          kubectl -n kubeoracle get pod "$holder"
+          echo "replicas: $pods"; echo "leader: $holder"
+          echo " $pods " | grep -q " $holder "
+      - name: Killing the leader hands over to the other replica
+        run: |
+          old=$(kubectl -n kubeoracle get lease kubeoracle-scanner -o jsonpath='{.spec.holderIdentity}')
+          kubectl -n kubeoracle delete pod "$old" --wait=false
+          for i in $(seq 1 30); do
+            holder=$(kubectl -n kubeoracle get lease kubeoracle-scanner -o jsonpath='{.spec.holderIdentity}')
+            if [ -n "$holder" ] && [ "$holder" != "$old" ]; then echo "failover: $old -> $holder after ~$((i*2))s"; exit 0; fi
+            sleep 2
+          done
+          echo "no failover"; exit 1
       - if: failure()
         run: kubectl -n kubeoracle logs -l app.kubernetes.io/name=kubeoracle --tail=100 --prefix || true

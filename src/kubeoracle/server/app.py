@@ -69,18 +69,22 @@ def create_app(settings: Settings) -> FastAPI:
     except ImportError:
         log.info("MCP extra not installed; /mcp disabled")
 
+    state: dict[str, Any] = {"last_scan": None, "last_report": None, "elector": AlwaysLeader()}
+
     @asynccontextmanager
     async def lifespan(_: FastAPI):
-        if mcp_server is None:
-            yield
-            return
-        async with mcp_server.session_manager.run():
-            yield
+        try:
+            if mcp_server is None:
+                yield
+            else:
+                async with mcp_server.session_manager.run():
+                    yield
+        finally:
+            state["elector"].stop()  # on SIGTERM: hand the scanner lease to another replica immediately
 
     app = FastAPI(title="KubeOracle", version=__version__, lifespan=lifespan,
                   description="Evidence-based Kubernetes troubleshooting API.")
     store = open_store(settings)
-    state: dict[str, Any] = {"last_scan": None, "last_report": None, "elector": AlwaysLeader()}
     if settings.cors_origins:
         app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_methods=["GET", "POST"],
                            allow_headers=["Authorization", "Content-Type"])

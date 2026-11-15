@@ -2,7 +2,7 @@
 
 import json
 import threading
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 import pytest
@@ -63,7 +63,7 @@ def fake_api(tmp_path):
                 return self._send(200, {"items": page, "metadata": {"continue": cont} if cont else {}})
             return self._send(200, {"items": items, "metadata": {}})
 
-    server = HTTPServer(("127.0.0.1", 0), Handler)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     host = f"http://127.0.0.1:{server.server_port}"
     kubeconfig = tmp_path / "kubeconfig"

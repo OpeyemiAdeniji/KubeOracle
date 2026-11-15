@@ -81,8 +81,8 @@ class LeaderElector:
         renewed = _parse(spec.get("renewTime")) or _parse(spec.get("acquireTime"))
         duration = spec.get("leaseDurationSeconds") or self.lease_seconds
         expired = renewed is None or t > renewed + timedelta(seconds=duration)
-        if holder != self.identity and not expired:
-            return False
+        if holder and holder != self.identity and not expired:
+            return False  # someone else holds a live lease (an empty holder means it was released)
         if holder != self.identity:
             spec["acquireTime"] = _micro(t)
             spec["leaseTransitions"] = (spec.get("leaseTransitions") or 0) + 1
@@ -116,7 +116,26 @@ class LeaderElector:
         return self
 
     def stop(self) -> None:
+        """Stop and hand the lease back, so another replica takes over at once instead of after expiry."""
         self._stop.set()
+        if self.is_leader:
+            self.release()
+
+    def release(self) -> bool:
+        self.is_leader = False
+        try:
+            lease = self.client.get(f"{self._path}/{self.name}")
+            spec = lease.get("spec") or {}
+            if spec.get("holderIdentity") != self.identity:
+                return False
+            spec.update(holderIdentity=None, leaseDurationSeconds=1, renewTime=_micro(now()))
+            lease["spec"] = spec
+            self.client.request("PUT", f"{self._path}/{self.name}", body=lease)
+            log.info("%s released leadership", self.identity)
+            return True
+        except Exception as exc:  # best effort: the lease still expires on its own
+            log.warning("could not release the lease: %s", exc)
+            return False
 
 
 class AlwaysLeader:

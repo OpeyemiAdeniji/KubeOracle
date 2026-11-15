@@ -7,7 +7,7 @@ import socket
 import threading
 import time
 from datetime import timedelta
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 import yaml
@@ -105,7 +105,7 @@ def lease_api(tmp_path):
                 state["lease"] = body
                 return self._send(200, body)
 
-    srv = HTTPServer(("127.0.0.1", 0), H)
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     kc = tmp_path / "kc"
     kc.write_text(yaml.safe_dump({
@@ -133,6 +133,10 @@ def test_leader_election_and_failover(lease_api):
     assert state["lease"]["spec"]["holderIdentity"] == "pod-b"
     assert state["lease"]["spec"]["leaseTransitions"] == 1
     assert a.try_acquire() is False
+    b.is_leader = True
+    b.stop()                                # graceful shutdown hands the lease back
+    assert state["lease"]["spec"]["holderIdentity"] is None
+    assert a.try_acquire() is True          # no waiting for expiry
 
 
 # ---------------------------------------------------------------- MCP over HTTP
