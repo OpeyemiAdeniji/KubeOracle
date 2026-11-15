@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KubeOracle — know why Kubernetes broke, not just that it broke</title>
+<meta name="description" content="Open-source Kubernetes troubleshooting. KubeOracle finds what's broken, links it to the change that caused it, and gives you the fix — from your terminal, your AI assistant, CI, or a dashboard in your cluster.">
+<meta property="og:title" content="KubeOracle — know why Kubernetes broke">
+<meta property="og:description" content="60 evidence-based checks, change correlation and rollback commands. CLI, kubectl plugin, MCP server and Helm chart. Free and open source.">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary">
+<meta name="theme-color" content="#0b1020">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<script>
+  try { const t = localStorage.getItem("ko-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+</script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="nav" id="top">
+  <div class="wrap nav-inner">
+    <a class="brand" href="#top" aria-label="KubeOracle home">
+      <img src="favicon.svg" alt="" width="28" height="28"><span>KubeOracle</span>
+    </a>
+    <nav class="links" aria-label="Main">
+      <a href="#how">How it works</a>
+      <a href="#ways">Ways to use</a>
+      <a href="#catches">What it catches</a>
+      <a href="#trust">Trust</a>
+      <a href="https://github.com/OpeyemiAdeniji/KubeOracle/tree/main/docs">Docs</a>
+    </nav>
+    <div class="nav-actions">
+      <button class="icon-btn" id="theme" type="button" aria-label="Toggle light and dark theme">
+        <svg class="sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.5"/><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3M4.6 4.6l2.1 2.1M17.3 17.3l2.1 2.1M4.6 19.4l2.1-2.1M17.3 6.7l2.1-2.1"/></svg>
+        <svg class="moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11Z"/></svg>
+      </button>
+      <a class="btn btn-ghost gh" href="https://github.com/OpeyemiAdeniji/KubeOracle">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38v-1.34c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.05-.49.05-.49.81.06 1.23.83 1.23.83.72 1.23 1.88.87 2.34.67.07-.52.28-.87.51-1.07-1.78-.2-3.65-.89-3.65-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.6 7.6 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 0 0 8 0Z"/></svg>
+        <span>GitHub</span>
+      </a>
+      <button class="icon-btn menu-btn" id="menu" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="mobile-menu">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+  <div class="mobile-menu" id="mobile-menu" hidden>
+    <a href="#how">How it works</a><a href="#ways">Ways to use</a><a href="#catches">What it catches</a>
+    <a href="#trust">Trust</a><a href="https://github.com/OpeyemiAdeniji/KubeOracle/tree/main/docs">Docs</a>
+    <a href="https://github.com/OpeyemiAdeniji/KubeOracle">GitHub</a>
+  </div>
+</header>
+
+<main id="main">
+
+<!-- HERO -->
+<section class="hero">
+  <div class="grid-bg" aria-hidden="true"></div>
+  <div class="wrap hero-inner">
+    <p class="pill"><span class="dot"></span>Open source · Apache-2.0 · Works without AI</p>
+    <h1>Know <em>why</em> it broke.<br>Not just <span class="strike">that</span> it broke.</h1>
+    <p class="lede">KubeOracle finds what's failing in your Kubernetes cluster, links it to the change that caused it,
+      and hands you the fix — from your terminal, your AI assistant, your CI, or a dashboard in the cluster.</p>
+
+    <div class="install" data-tabs>
+      <div class="tabs" role="tablist" aria-label="Install method">
+        <button role="tab" aria-selected="true" data-cmd="pipx install &quot;kubeoracle[all]&quot;">pipx</button>
+        <button role="tab" aria-selected="false" data-cmd="kubectl oracle diagnose -n shop">kubectl</button>
+        <button role="tab" aria-selected="false" data-cmd="helm install kubeoracle oci://ghcr.io/opeyemiadeniji/charts/kubeoracle -n kubeoracle --create-namespace">Helm</button>
+        <button role="tab" aria-selected="false" data-cmd="claude mcp add kubeoracle -- kubeoracle mcp">MCP</button>
+      </div>
+      <div class="cmd">
+        <code><span class="prompt">$</span> <span id="cmd-text">pipx install "kubeoracle[all]"</span></code>
+        <button class="copy" type="button" data-copy-target="cmd-text" aria-label="Copy command">Copy</button>
+      </div>
+    </div>
+
+    <div class="cta-row">
+      <a class="btn btn-primary" href="https://github.com/OpeyemiAdeniji/KubeOracle">Star on GitHub</a>
+      <a class="btn btn-ghost" href="#how">See how it works →</a>
+    </div>
+
+    <!-- Animated terminal -->
+    <div class="terminal" aria-label="Example: KubeOracle diagnosing a broken deployment">
+      <div class="term-bar"><span></span><span></span><span></span><p>~/clusters/prod — kubectl oracle</p></div>
+      <pre class="term-body" id="term" aria-live="off"></pre>
+      <noscript>
+        <pre class="term-body">$ kubectl oracle diagnose -n shop
+Diagnosis: Deployment/shop/checkout is crash looping — it expects DATABASE_URL, removed in revision 2.
+$ kubectl rollout undo deployment/checkout -n shop --to-revision=1</pre>
+      </noscript>
+    </div>
+  </div>
+</section>
+
+<!-- WORKS WITH -->
+<section class="marquee-section" aria-label="Works with">
+  <p class="eyebrow center">Plugs into the tools you already use</p>
+  <div class="marquee">
+    <div class="marquee-track">
+      <span>kubectl</span><i>✦</i><span>Helm</span><i>✦</i><span>Claude Code</span><i>✦</i><span>Cursor</span><i>✦</i>
+      <span>VS Code</span><i>✦</i><span>Alertmanager</span><i>✦</i><span>Slack</span><i>✦</i><span>Microsoft Teams</span><i>✦</i>
+      <span>Argo CD</span><i>✦</i><span>Prometheus</span><i>✦</i><span>GitHub Actions</span><i>✦</i><span>Ollama</span><i>✦</i>
+      <span>Anthropic</span><i>✦</i><span>OpenAI</span><i>✦</i><span>OpenRouter</span><i>✦</i><span>PostgreSQL</span><i>✦</i>
+    </div>
+  </div>
+</section>
+
+<!-- STATS -->
+<section class="wrap stats" aria-label="Key numbers">
+  <div class="stat"><b data-count="79">0</b><span>% of production incidents follow a change<a class="cite" href="https://komodor.com/blog/komodor-2025-enterprise-kubernetes-report-finds-nearly-80-of-production-outages/" title="Komodor 2025 Enterprise Kubernetes Report">¹</a></span></div>
+  <div class="stat"><b data-count="60">0</b><span>evidence-based checks, from crash loops to retired ingress controllers</span></div>
+  <div class="stat"><b>~2s</b><span>to analyse a 5,000-pod cluster</span></div>
+  <div class="stat"><b>0</b><span>Secret values kept — only key names and certificate dates</span></div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="section" id="how">
+  <div class="wrap">
+    <p class="eyebrow">How it works</p>
+    <h2>From "something's down" to the fix, in one command.</h2>
+    <p class="sub">Most tools tell you a pod is crashing. KubeOracle tells you which deploy broke it, what changed, and how to undo it.</p>
+
+    <div class="steps">
+      <article class="step reveal">
+        <span class="step-n">01</span>
+        <h3>Read the cluster</h3>
+        <p>One parallel read through the Kubernetes API: workloads, events, nodes, networking, storage, Helm releases,
+          Argo CD apps and the logs of failing containers. Secrets are reduced to key names on read.</p>
+      </article>
+      <article class="step reveal">
+        <span class="step-n">02</span>
+        <h3>Prove what's wrong</h3>
+        <p>60 deterministic checks turn raw state into findings with evidence copied from the cluster — exit codes,
+          scheduler reasons, missing keys, the log line that names the missing env var.</p>
+      </article>
+      <article class="step reveal">
+        <span class="step-n">03</span>
+        <h3>Find what changed</h3>
+        <p>Rollout diffs (image, env, resources, probes), ConfigMap edits, Helm upgrades and Argo CD syncs are linked to
+          the failures that followed them, with the exact rollback command.</p>
+      </article>
+      <article class="step reveal">
+        <span class="step-n">04</span>
+        <h3>Explain it, carefully</h3>
+        <p>Findings become incidents with causes before symptoms. Add Claude, OpenAI or a local model for a written
+          explanation — every claim must cite real evidence, or its confidence is capped.</p>
+      </article>
+    </div>
+
+    <!-- Timeline visual -->
+    <div class="timeline reveal" aria-label="Example timeline linking a rollout to a crash">
+      <div class="tl-head"><span class="tl-title">Deployment/shop/checkout</span><span class="badge crit">Critical</span></div>
+      <ol>
+        <li><time>14:02</time><span class="tl-dot change"></span><div><b>Rollout revision 2</b><p>image checkout:1.4 → 1.5 · env removed <code>DATABASE_URL</code></p></div></li>
+        <li><time>14:03</time><span class="tl-dot bad"></span><div><b>CrashLoopBackOff · exit code 1</b><p>log: <code>KeyError: 'DATABASE_URL'</code></p></div></li>
+        <li><time>14:05</time><span class="tl-dot bad"></span><div><b>0/2 replicas ready</b><p>Service <code>checkout</code> has no ready endpoints</p></div></li>
+        <li class="fix"><time>now</time><span class="tl-dot ok"></span><div><b>Likely cause: the 14:02 rollout · 85% confidence</b>
+          <p><code>kubectl rollout undo deployment/checkout -n shop --to-revision=1</code></p></div></li>
+      </ol>
+    </div>
+  </div>
+</section>
+
+<!-- WAYS TO USE -->
+<section class="section alt" id="ways">
+  <div class="wrap">
+    <p class="eyebrow">Four ways in</p>
+    <h2>Use it where you already work.</h2>
+    <p class="sub">One engine behind every entry point. Same checks, same evidence, same answers.</p>
+    <div class="ways">
+      <article class="way reveal">
+        <span class="way-tag">01 · Terminal</span>
+        <h3>CLI &amp; kubectl plugin</h3>
+        <p>Diagnose, ask questions in plain English, see recent changes, audit for production, check upgrades and cost.</p>
+        <pre><code><span class="c">$</span> kubectl oracle diagnose -n shop -v
+<span class="c">$</span> kubectl oracle ask "why is checkout failing?"
+<span class="c">$</span> kubectl oracle changes --since 2h
+<span class="c">$</span> kubectl oracle upgrade-check --target 1.36</code></pre>
+      </article>
+      <article class="way reveal">
+        <span class="way-tag">02 · AI assistants</span>
+        <h3>MCP server</h3>
+        <p>Give Claude Code, Cursor or VS Code structured cluster evidence. Your assistant reasons; KubeOracle supplies facts.</p>
+        <pre><code><span class="c">$</span> claude mcp add kubeoracle -- kubeoracle mcp
+<span class="g"># or the shared, token-protected endpoint</span>
+https://kubeoracle.your-co.com/mcp</code></pre>
+      </article>
+      <article class="way reveal">
+        <span class="way-tag">03 · In the cluster</span>
+        <h3>Dashboard, API &amp; alerts</h3>
+        <p>Helm chart with a web dashboard, REST API, Alertmanager receiver and background scans that post the diagnosis
+          to Slack or Teams before anyone opens a laptop.</p>
+        <pre><code><span class="c">$</span> helm install kubeoracle \
+    oci://ghcr.io/opeyemiadeniji/charts/kubeoracle \
+    --set notifications.slackWebhookUrl=$SLACK</code></pre>
+      </article>
+      <article class="way reveal">
+        <span class="way-tag">04 · CI</span>
+        <h3>Stop it before it ships</h3>
+        <p>Lint manifests, Helm charts and Kustomize output on every pull request. Results land in GitHub code scanning (SARIF).</p>
+        <pre><code><span class="g"># .github/workflows/k8s.yml</span>
+- uses: OpeyemiAdeniji/KubeOracle@v2
+  with:
+    paths: k8s/
+    target-version: "1.36"</code></pre>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- DASHBOARD MOCK -->
+<section class="section" aria-label="Dashboard preview">
+  <div class="wrap">
+    <p class="eyebrow">In-cluster dashboard</p>
+    <h2>Incidents, not alerts.</h2>
+    <p class="sub">Pods on a dead node become one infrastructure incident. A bad rollout and its crashing pods become one app incident.</p>
+    <div class="dash reveal" role="img" aria-label="Mock-up of the KubeOracle dashboard showing incidents, recent changes and counts">
+      <div class="dash-side">
+        <div class="dash-brand"><img src="favicon.svg" alt="" width="18" height="18"> KubeOracle</div>
+        <span class="on">Diagnose</span><span>Ask</span><span>Changes</span><span>Cost</span><span>Upgrade</span><span>Lint</span><span>History</span>
+      </div>
+      <div class="dash-main">
+        <div class="dash-stats">
+          <div><span class="badge crit">critical</span><b>3</b></div>
+          <div><span class="badge high">high</span><b>5</b></div>
+          <div><span class="badge med">medium</span><b>2</b></div>
+          <div><span class="muted">changes · 6h</span><b>9</b></div>
+        </div>
+        <div class="dash-card">
+          <div class="dash-row"><span class="badge crit">critical</span><b>Deployment/shop/checkout</b><span class="muted">app</span></div>
+          <p>Crash looping: expects <code>DATABASE_URL</code>. Started after rollout revision 2 (14:02).</p>
+          <code class="dash-cmd">kubectl rollout undo deployment/checkout -n shop --to-revision=1</code>
+        </div>
+        <div class="dash-card">
+          <div class="dash-row"><span class="badge crit">critical</span><b>Node/node-2</b><span class="muted">infra</span></div>
+          <p>NotReady for 40m — kubelet stopped posting status. 6 pods affected, grouped into this incident.</p>
+        </div>
+        <div class="dash-card">
+          <div class="dash-row"><span class="badge high">high</span><b>Secret/shop/shop-tls</b><span class="muted">security</span></div>
+          <p>Certificate expires in 3 days; cert-manager renewal is failing.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- WHAT IT CATCHES -->
+<section class="section alt" id="catches">
+  <div class="wrap">
+    <p class="eyebrow">What it catches</p>
+    <h2>60 checks built from real incidents.</h2>
+    <p class="sub">Each one says what is wrong in plain words, shows the evidence, and gives the fix.</p>
+    <div class="catch-grid">
+      <article class="catch reveal"><h3>Workloads</h3><p>Crash loops explained by exit code and logs, OOM kills with a suggested limit, rollouts past their deadline, failing Jobs and CronJobs.</p></article>
+      <article class="catch reveal"><h3>Images &amp; config</h3><p>Missing ConfigMaps, Secrets and keys; bad image tags; Docker Hub rate limits; images built for the wrong CPU architecture.</p></article>
+      <article class="catch reveal"><h3>Network &amp; DNS</h3><p>Services with no endpoints (and the label typo why), wrong target ports, broken Ingress and Gateway routes, NetworkPolicies that block DNS.</p></article>
+      <article class="catch reveal"><h3>Nodes &amp; scheduling</h3><p>NotReady and pressured nodes, the scheduler's real reason a pod is Pending, full clusters, cordoned nodes left behind.</p></article>
+      <article class="catch reveal"><h3>Platform</h3><p>Admission webhooks that block every deploy, pod IP exhaustion, Pod Security rejections, expired certificates, CoreDNS down.</p></article>
+      <article class="catch reveal"><h3>Upgrades</h3><p>Removed APIs in manifests and Helm releases, PDBs that hang node drains, retired ingress-nginx, containerd 1.x, cgroup v1, kubelet skew.</p></article>
+      <article class="catch reveal"><h3>Cost</h3><p>Over-requested CPU and memory with right-sizing from real usage, idle GPUs, unused volumes, load balancers with no backends.</p></article>
+      <article class="catch reveal"><h3>Security &amp; reliability</h3><p>Privileged containers, secrets in plain env vars, cluster-admin service accounts, single replicas, missing probes and limits.</p></article>
+    </div>
+    <p class="center more"><a class="link" href="https://github.com/OpeyemiAdeniji/KubeOracle/blob/main/docs/checks.md">See all 60 checks →</a></p>
+  </div>
+</section>
+
+<!-- TRUST -->
+<section class="section" id="trust">
+  <div class="wrap">
+    <p class="eyebrow">Built to be trusted with production</p>
+    <h2>Read-only by default. Evidence, always.</h2>
+    <div class="trust-grid">
+      <article class="trust reveal"><span class="ico">◎</span><h3>AI is optional</h3><p>Every finding comes from deterministic checks. Bring Claude, OpenAI, OpenRouter or a local Ollama model — or none at all.</p></article>
+      <article class="trust reveal"><span class="ico">⛨</span><h3>Your secrets stay yours</h3><p>Secret and ConfigMap values are dropped at read time. Tokens, passwords and keys are redacted from logs before anything is stored or sent.</p></article>
+      <article class="trust reveal"><span class="ico">↺</span><h3>Guarded fixes</h3><p>Restart, rollback and scale show a plan, run a server-side dry run, ask before changing anything, and write an audit log.</p></article>
+      <article class="trust reveal"><span class="ico">⇄</span><h3>Highly available</h3><p>Run two or more replicas on PostgreSQL. A Kubernetes Lease elects one scanner; failover takes seconds.</p></article>
+      <article class="trust reveal"><span class="ico">✓</span><h3>Signed releases</h3><p>Container images and Helm charts are signed with cosign and ship an SBOM and build provenance.</p></article>
+      <article class="trust reveal"><span class="ico">⌁</span><h3>Tested on real clusters</h3><p>Every change breaks a kind cluster in ten ways and checks each failure is caught, then installs the chart in both modes.</p></article>
+    </div>
+  </div>
+</section>
+
+<!-- FINAL CTA -->
+<section class="final">
+  <div class="wrap final-inner">
+    <h2>Your next incident deserves a head start.</h2>
+    <p>Free, open source, and ready for your cluster in under a minute.</p>
+    <div class="cmd cmd-lg">
+      <code><span class="prompt">$</span> <span id="final-cmd">pipx install "kubeoracle[all]" &amp;&amp; kubectl oracle doctor</span></code>
+      <button class="copy" type="button" data-copy-target="final-cmd" aria-label="Copy command">Copy</button>
+    </div>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="https://github.com/OpeyemiAdeniji/KubeOracle">Get started on GitHub</a>
+      <a class="btn btn-ghost" href="https://github.com/OpeyemiAdeniji/KubeOracle/blob/main/docs/production.md">Production guide</a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="footer">
+  <div class="wrap foot-inner">
+    <div class="brand"><img src="favicon.svg" alt="" width="22" height="22"><span>KubeOracle</span></div>
+    <nav aria-label="Footer">
+      <a href="https://github.com/OpeyemiAdeniji/KubeOracle">GitHub</a>
+      <a href="https://github.com/OpeyemiAdeniji/KubeOracle/tree/main/docs">Docs</a>
+      <a href="https://github.com/OpeyemiAdeniji/KubeOracle/blob/main/docs/mcp.md">MCP setup</a>
+      <a href="https://github.com/OpeyemiAdeniji/KubeOracle/blob/main/SECURITY.md">Security</a>
+      <a href="https://github.com/OpeyemiAdeniji/KubeOracle/blob/main/LICENSE">Apache-2.0</a>
+    </nav>
+    <p class="muted small">Built by Opeyemi Adeniji. ¹ <a href="https://komodor.com/blog/komodor-2025-enterprise-kubernetes-report-finds-nearly-80-of-production-outages/">Komodor 2025 Enterprise Kubernetes Report</a>.</p>
+  </div>
+</footer>
+
+<script src="main.js" defer></script>
+</body>
+</html>

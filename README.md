@@ -2,6 +2,8 @@
 
 **Find out what is broken in Kubernetes, why, and what changed — in one command.**
 
+[Website](https://opeyemiadeniji.github.io/KubeOracle/) · [Docs](docs/) · [Production guide](docs/production.md)
+
 KubeOracle reads your cluster, runs 60 deterministic checks, links each failure to the change that most likely
 caused it (a rollout, a ConfigMap edit, a Helm upgrade, a node going away) and tells you the fix, with the
 exact commands. An LLM is optional: it ranks and explains the evidence, it never invents it.
