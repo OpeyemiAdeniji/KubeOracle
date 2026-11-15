@@ -92,6 +92,10 @@ spec:
                   key: {{ $key }}
                   optional: {{ ne $env "KUBESIFT_API_TOKEN" }}
             {{- end }}
+          lifecycle:
+            preStop:
+              # keep serving while endpoints and load balancers stop routing to this pod
+              exec: {command: [sleep, "5"]}
           readinessProbe:
             httpGet: {path: /readyz, port: http}
             periodSeconds: 10
