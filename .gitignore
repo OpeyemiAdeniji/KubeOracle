@@ -9,3 +9,10 @@ node_modules/
 *.log
 .DS_Store
 .kube/
+
+# Local MCP client config (may contain API keys)
+.mcp.json
+.env
+.env.*
+!.env.example
+!.env.*.example
