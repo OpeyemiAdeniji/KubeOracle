@@ -229,6 +229,84 @@ def create_app(settings: Settings) -> FastAPI:
             background.add_task(_alert_investigation, settings, store, due, names)
         return {"accepted": len(firing), "namespaces": namespaces, "investigating": due}
 
+    class PreflightRequest(BaseModel):
+        manifests: str = Field(max_length=2_000_000)
+        namespace: str = "default"
+        server_dry_run: bool = False
+        check_images: bool = False
+
+    @app.post("/api/v1/preflight", dependencies=[Depends(auth)])
+    def preflight_api(req: PreflightRequest) -> dict[str, Any]:
+        from kubesift.lint import LintError, _docs_from_text
+        from kubesift.preflight import preflight
+        try:
+            docs = _docs_from_text(req.manifests, "request")
+        except LintError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        client = KubeClient(kubeconfig=settings.kubeconfig, context=settings.context,
+                            timeout=settings.request_timeout) if req.server_dry_run else None
+        res = preflight(docs, snap(None, None, with_logs=False), settings, default_namespace=req.namespace,
+                        client=client, server_dry_run=req.server_dry_run, check_images=req.check_images)
+        return res.to_dict()
+
+    @app.get("/api/v1/diff", dependencies=[Depends(auth)])
+    def diff_api(since: str = "1h", namespace: str | None = None) -> dict[str, Any]:
+        from kubesift.timetravel import diff, digest
+        from kubesift.util import now
+        current = digest(snap(namespace, None, with_logs=False))
+        earlier = store.digest_before(current["cluster"], now() - parse_duration(since))
+        if earlier is None:
+            raise HTTPException(status_code=404, detail=f"no stored history from {since} ago yet")
+        items = diff(earlier, current)
+        if namespace:
+            items = [i for i in items if f"/{namespace}/" in i["resource"] or i["kind"] == "Node"]
+        return {"from": earlier.get("time"), "to": current.get("time"), "changes": items}
+
+    @app.get("/api/v1/postmortem", dependencies=[Depends(auth)])
+    def postmortem_api(namespace: str | None = None, since: str = "24h", format: str = "json") -> Any:
+        from kubesift.postmortem import build, to_markdown
+        s = snap(namespace, None)
+        report = investigate(settings, s, use_llm=True, window=parse_duration(since), store=store)
+        pm = build(report, s, store.list_audit(200), settings)
+        return PlainTextResponse(to_markdown(pm)) if format == "markdown" else pm
+
+    # ---------------------------------------------------------------- Slack
+    async def _slack_verified(request: Request) -> bytes:
+        from kubesift import slack
+        if not settings.slack_signing_secret:
+            raise HTTPException(status_code=404, detail="Slack integration is not configured")
+        body = await request.body()
+        if not slack.verify(settings.slack_signing_secret, request.headers.get("X-Slack-Request-Timestamp"), body,
+                            request.headers.get("X-Slack-Signature")):
+            raise HTTPException(status_code=401, detail="invalid Slack signature")
+        return body
+
+    @app.post("/api/v1/slack/commands", include_in_schema=False)
+    async def slack_command(request: Request, background: BackgroundTasks) -> dict[str, Any]:
+        from urllib.parse import parse_qs
+
+        from kubesift import slack
+        form = {k: v[0] for k, v in parse_qs((await _slack_verified(request)).decode()).items()}
+        verb, args = slack.parse(form.get("text", ""))
+        if verb not in ("diagnose", "why", "changes", "postmortem"):
+            return {"response_type": "ephemeral", "text": slack.HELP}
+        background.add_task(_slack_work, settings, store, verb, args, form.get("response_url", ""))
+        return {"response_type": "ephemeral", "text": f":mag: Working on `{verb} {' '.join(args)}`…"}
+
+    @app.post("/api/v1/slack/actions", include_in_schema=False)
+    async def slack_action(request: Request, background: BackgroundTasks) -> dict[str, Any]:
+        import json as _json
+        from urllib.parse import parse_qs
+        body = await _slack_verified(request)
+        payload = _json.loads(parse_qs(body.decode()).get("payload", ["{}"])[0])
+        actions = payload.get("actions") or []
+        if not actions or actions[0].get("action_id") != "sift_fix":
+            return {}
+        value = _json.loads(actions[0].get("value") or "{}")
+        user = (payload.get("user") or {}).get("id", "")
+        background.add_task(_slack_fix, settings, store, value, user, payload.get("response_url", ""))
+        return {}
+
     @app.get("/metrics", include_in_schema=False)
     def metrics() -> PlainTextResponse:
         report: Report | None = state["last_report"]
@@ -288,6 +366,11 @@ def _scan_loop(settings: Settings, store: Store, state: dict[str, Any]) -> None:
             report = investigate(settings, snap, use_llm=False, window=timedelta(hours=1), store=store)
             state["last_report"] = report
             state["last_scan"] = int(time.time())
+            try:
+                from kubesift.timetravel import digest
+                store.save_digest(digest(snap))  # history for `kubesift diff --since` / time travel
+            except Exception as exc:
+                log.warning("could not store cluster digest: %s", exc)
             urgent = [f for f in report.findings if f.kind == "problem" and f.severity.rank >= threshold]
             fresh = store.new_findings(report.cluster, urgent)
             if fresh:
@@ -298,3 +381,65 @@ def _scan_loop(settings: Settings, store: Store, state: dict[str, Any]) -> None:
         except Exception as exc:
             log.warning("background scan failed: %s", exc)
         time.sleep(settings.scan_interval)
+
+
+def _slack_post(url: str, blocks: list[dict[str, Any]], text: str) -> None:
+    import httpx
+    if not url.startswith("https://hooks.slack.com/"):
+        log.warning("refusing to post to a non-Slack response_url")
+        return
+    try:
+        httpx.post(url, json={"response_type": "in_channel", "replace_original": False, "text": text,
+                              "blocks": blocks}, timeout=15)
+    except httpx.HTTPError as exc:
+        log.warning("Slack response failed: %s", exc)
+
+
+def _slack_work(settings: Settings, store: Store, verb: str, args: list[str], response_url: str) -> None:
+    from kubesift import slack
+    from kubesift.analysis.changes import detect_changes
+    try:
+        if verb == "diagnose":
+            ns = args[0] if args else None
+            report = investigate(settings, snapshot_for(settings, ns), use_llm=True, store=store, include_risks=False)
+            store.save_report(report, source="slack", retention_days=settings.history_days)
+            _slack_post(response_url, slack.report_blocks(report, f"Diagnosis: {ns or 'all namespaces'}"), "KubeSift diagnosis")
+        elif verb == "why":
+            if not args:
+                _slack_post(response_url, [{"type": "section", "text": {"type": "mrkdwn", "text": slack.HELP}}], "help")
+                return
+            ns = args[1] if len(args) > 1 else None
+            report, answer = ask(settings, snapshot_for(settings, ns), f"why is {args[0]} failing?", store=store)
+            blocks = [{"type": "section", "text": {"type": "mrkdwn", "text": f"*{args[0]}*: {answer['answer'][:2800]}"}}]
+            blocks += slack.report_blocks(report, f"Evidence for {args[0]}")[1:]
+            _slack_post(response_url, blocks, answer["answer"][:200])
+        elif verb == "changes":
+            ns = args[0] if args else None
+            since = args[1] if len(args) > 1 else "6h"
+            items = detect_changes(snapshot_for(settings, ns, with_logs=False), parse_duration(since))
+            _slack_post(response_url, slack.changes_blocks(items, ns or "all namespaces", since), "KubeSift changes")
+        elif verb == "postmortem":
+            from kubesift.postmortem import build, to_markdown
+            ns = args[0] if args else None
+            s = snapshot_for(settings, ns)
+            pm = build(investigate(settings, s, use_llm=True, store=store), s, store.list_audit(200), settings)
+            md = to_markdown(pm)
+            _slack_post(response_url, [{"type": "section", "text": {"type": "mrkdwn", "text": md[:2900]}}], pm["title"])
+    except Exception as exc:
+        _slack_post(response_url, [{"type": "section", "text": {"type": "mrkdwn", "text": f":x: {exc}"}}], "KubeSift error")
+
+
+def _slack_fix(settings: Settings, store: Store, value: dict[str, Any], user: str, response_url: str) -> None:
+    from kubesift import slack
+    from kubesift.cluster.client import KubeError
+    from kubesift.remediate import execute, plan
+    may_apply = settings.allow_writes and (not settings.slack_allowed_users or user in settings.slack_allowed_users)
+    dry_run = bool(value.get("dry_run", True)) or not may_apply
+    try:
+        client = KubeClient(kubeconfig=settings.kubeconfig, context=settings.context, timeout=settings.request_timeout)
+        p = plan(client, value["action"], value["kind"], value["namespace"], value["name"], value.get("replicas"))
+        result = execute(client, p, dry_run, store, actor=f"slack:{user}")
+        blocks = slack.fix_result_blocks(p.description, p.kubectl, result, dict(value, dry_run=dry_run), may_apply)
+    except (KubeError, ValueError, KeyError) as exc:
+        blocks = [{"type": "section", "text": {"type": "mrkdwn", "text": f":x: {exc}"}}]
+    _slack_post(response_url, blocks, "KubeSift fix")

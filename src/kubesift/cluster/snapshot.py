@@ -62,6 +62,8 @@ KINDS: list[tuple[str, str, str, str, bool, bool]] = [
     ("httproutes", "HTTPRoute", "/apis/gateway.networking.k8s.io/v1", "httproutes", True, True),
     ("certificates", "Certificate", "/apis/cert-manager.io/v1", "certificates", True, True),
     ("argoapps", "Application", "/apis/argoproj.io/v1alpha1", "applications", True, True),
+    ("apiservices", "APIService", "/apis/apiregistration.k8s.io/v1", "apiservices", False, True),
+    ("nodeclaims", "NodeClaim", "/apis/karpenter.sh/v1", "nodeclaims", False, True),
 ]
 KIND_TO_KEY = {kind: key for key, kind, *_ in KINDS}
 CLUSTER_SCOPED = {key for key, _, _, _, namespaced, _ in KINDS if not namespaced}

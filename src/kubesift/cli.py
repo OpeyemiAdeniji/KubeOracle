@@ -21,8 +21,12 @@ app = typer.Typer(no_args_is_help=True, rich_markup_mode="rich", add_completion=
                   help="KubeSift: find out what is broken in Kubernetes, why, and what changed.")
 note_app = typer.Typer(help="Team notes: record what fixed a problem so the next person sees it.")
 snapshot_app = typer.Typer(help="Save a redacted cluster snapshot to analyse offline or attach to a bug report.")
+drill_app = typer.Typer(help="Fire drills: break a dedicated namespace on purpose to practise on-call.")
+knowledge_app = typer.Typer(help="Knowledge packs: share what fixed past incidents between teams and clusters.")
 app.add_typer(note_app, name="note")
 app.add_typer(snapshot_app, name="snapshot")
+app.add_typer(drill_app, name="drill")
+app.add_typer(knowledge_app, name="knowledge")
 
 console = Console()
 err = Console(stderr=True)
@@ -589,6 +593,270 @@ def mcp(
 def version() -> None:
     """Print the version."""
     console.print(f"kubesift {__version__}")
+
+
+@app.command()
+def preflight(
+    paths: list[str] = typer.Argument(..., help="Manifests, Helm chart or Kustomize dir, or - for stdin."),
+    namespace: str = typer.Option("default", "--namespace", "-n", help="Namespace for objects without one."),
+    values: list[str] = typer.Option([], "--values", "-f", help="Helm values files."),
+    server_dry_run: bool = typer.Option(False, "--server-dry-run", help="Also ask the API server (webhooks, Pod Security, quota)."),
+    check_images: bool = typer.Option(False, "--check-images", help="Check that image tags exist in their registries."),
+    output: str = typer.Option("text", "--output", "-o", help="text | json | markdown"),
+    fail_on: str | None = typer.Option("high", "--fail-on", help="Exit 2 at or above this severity (none to disable)."),
+    from_file: str | None = FROM,
+) -> None:
+    """Check a change against the LIVE cluster before deploying: missing secrets, capacity, risky diffs, OOM risk."""
+    from kubesift.cluster.client import KubeClient
+    from kubesift.lint import LintError, load_documents
+    from kubesift.preflight import preflight as run_preflight
+
+    try:
+        docs = load_documents(paths, values)
+    except LintError as exc:
+        _fail(str(exc))
+    snap = _snapshot(None, from_file, with_logs=False)
+    s = state.settings
+    client = KubeClient(kubeconfig=s.kubeconfig, context=s.context, timeout=s.request_timeout) if server_dry_run else None
+    with err.status("Comparing with the live cluster…"):
+        res = run_preflight(docs, snap, s, default_namespace=namespace, client=client,
+                            server_dry_run=server_dry_run, check_images=check_images)
+    if output == "json":
+        print(json.dumps(res.to_dict(), indent=2, default=str))
+    elif output in ("md", "markdown"):
+        print(_preflight_markdown(res))
+    else:
+        from kubesift.report import print_findings
+        console.print(Text(f"Preflight against {res.target} ({res.server_version or '?'})", style="bold"))
+        for c in res.changes:
+            if c["action"] != "unchanged":
+                detail = f": {'; '.join(c['details'][:4])}" if c["details"] else ""
+                console.print(Text(f"  {c['action']:7} {c['resource']}{detail}",
+                                   style="cyan" if c["action"] == "create" else "magenta"))
+        print_findings(console, res.findings, title="Preflight findings")
+    _exit_on(res.findings, None if (fail_on or "").lower() == "none" else fail_on)
+
+
+def _preflight_markdown(res: Any) -> str:
+    blockers = [f for f in res.findings if f.severity.rank >= 3]
+    verdict = f"❌ {len(blockers)} blocker(s)" if blockers else "✅ no blockers"
+    lines = [f"### KubeSift preflight: {verdict}",
+             f"Target cluster `{res.target}` ({res.server_version or 'unknown version'})", ""]
+    changed = [c for c in res.changes if c["action"] != "unchanged"]
+    if changed:
+        lines += ["**Changes**", ""]
+        for c in changed:
+            detail = f" — {'; '.join(c['details'][:4])}" if c["details"] else ""
+            lines.append(f"- `{c['action']}` {c['resource']}{detail}")
+        lines.append("")
+    if res.findings:
+        lines += ["| Severity | Check | Resource | Finding |", "|---|---|---|---|"]
+        lines += [f"| {f.severity.value} | {f.check} | `{f.resource}` | {f.message.replace('|', '/')} |"
+                  for f in res.findings]
+    return "\n".join(lines)
+
+
+@app.command()
+def diff(
+    since: str | None = typer.Option(None, "--since", help="Compare now with the cluster as it was this long ago (e.g. 2h)."),
+    from_file: str | None = typer.Option(None, "--from", help="Earlier snapshot file (from `snapshot save`)."),
+    to_file: str | None = typer.Option(None, "--to", help="Later snapshot file (default: live cluster)."),
+    namespace: str | None = NS,
+    output: str = OUT,
+) -> None:
+    """Time travel: what is different between two moments (stored history or snapshot files)."""
+    from kubesift.cluster.snapshot import Snapshot
+    from kubesift.timetravel import diff as do_diff
+    from kubesift.timetravel import digest
+    from kubesift.util import now, parse_duration
+
+    if to_file:
+        later = Snapshot.from_dict(json.loads(Path(to_file).read_text(encoding="utf-8")))
+    else:
+        later = _snapshot(namespace, with_logs=False)
+    if from_file:
+        earlier = digest(Snapshot.from_dict(json.loads(Path(from_file).read_text(encoding="utf-8"))))
+    elif since:
+        store = _store()
+        earlier = store.digest_before(later.context, now() - parse_duration(since)) if store else None
+        if earlier is None:
+            _fail(f"no stored history for {later.context} from {since} ago. History is recorded by "
+                  "`kubesift snapshot record` and by the in-cluster service's background scans.")
+    else:
+        _fail("use --since 2h (stored history) or --from snapshot.json")
+    current = digest(later)
+    items = do_diff(earlier, current)
+    if namespace:
+        items = [i for i in items if f"/{namespace}/" in i["resource"] or i["kind"] == "Node"]
+    if output == "json":
+        print(json.dumps({"from": earlier.get("time"), "to": current.get("time"), "changes": items}, indent=2))
+        return
+    console.print(Text(f"{str(earlier.get('time', '?'))[:16]} → {str(current.get('time', '?'))[:16]} UTC · "
+                       f"{len(items)} difference(s)", style="bold"))
+    style = {"added": "green", "removed": "red", "changed": "yellow"}
+    for i in items:
+        console.print(Text(f"  {i['change']:8} {i['resource']}", style=style[i["change"]]))
+        for d in i["details"][:6]:
+            console.print(Text(f"           {d}", style="dim"))
+
+
+@snapshot_app.command("record")
+def snapshot_record(namespace: str | None = NS) -> None:
+    """Store a compact digest of the cluster now, for `kubesift diff --since` later."""
+    from kubesift.timetravel import digest
+
+    snap = _snapshot(namespace, with_logs=False)
+    store = _store()
+    if store is None:
+        _fail("history store unavailable")
+    stored = store.save_digest(digest(snap))
+    console.print("Recorded." if stored else "Nothing changed since the last record.")
+
+
+@app.command()
+def postmortem(
+    namespace: str | None = NS,
+    since: str = typer.Option("24h", "--since", help="How far back the incident window goes."),
+    report_id: str | None = typer.Option(None, "--report", help="Build from a stored investigation instead of now."),
+    output: str = typer.Option("markdown", "--output", "-o", help="markdown | json"),
+    llm: bool = LLM,
+    from_file: str | None = FROM,
+) -> None:
+    """Draft a blameless postmortem: impact, timeline, root cause, triggering change, action items."""
+    from kubesift.analysis.engine import investigate
+    from kubesift.postmortem import build, to_markdown
+    from kubesift.util import parse_duration
+
+    store = _store()
+    snap = None
+    if report_id:
+        report = store.get_report(report_id) if store else None
+        if report is None:
+            _fail(f"no report {report_id}")
+    else:
+        snap = _snapshot(namespace, from_file)
+        report = investigate(state.settings, snap, use_llm=llm, window=parse_duration(since), store=store)
+    pm = build(report, snap, store.list_audit(200) if store else [], state.settings if llm else None)
+    print(json.dumps(pm, indent=2) if output == "json" else to_markdown(pm))
+
+
+@drill_app.command("list")
+def drill_list() -> None:
+    """Available drills."""
+    from kubesift.drills import DRILLS
+
+    t = Table(title="Drills")
+    for col in ("ID", "Scenario", "What the on-call engineer sees"):
+        t.add_column(col)
+    for d in DRILLS.values():
+        t.add_row(d.id, d.title, d.story)
+    console.print(t)
+
+
+@drill_app.command("start")
+def drill_start(
+    drill_id: str = typer.Argument(..., help="Drill id from `kubesift drill list`."),
+    namespace: str = typer.Option("kubesift-drill", "--namespace", "-n"),
+    yes: bool = typer.Option(False, "--yes", "-y"),
+) -> None:
+    """Break a drill namespace on purpose. Only touches namespaces labelled kubesift.dev/drill=true."""
+    from kubesift.cluster.client import KubeClient, KubeError
+    from kubesift.drills import DRILLS, start
+
+    if drill_id not in DRILLS:
+        _fail(f"unknown drill {drill_id}; see `kubesift drill list`")
+    s = state.settings
+    client = KubeClient(kubeconfig=s.kubeconfig, context=s.context, timeout=s.request_timeout)
+    if not yes and not typer.confirm(f"Create broken workloads in namespace '{namespace}' on {client.context_name}?"):
+        raise typer.Exit(1)
+    try:
+        with err.status("Setting up the incident…"):
+            d = start(client, drill_id, namespace)
+    except (KubeError, ValueError) as exc:
+        _fail(str(exc))
+    console.print(Text(f"Incident started: {d.title}", style="bold red"))
+    console.print(d.story)
+    console.print(Text(f"Investigate it yourself first. Hint: `kubesift drill hint {d.id}`. Answer: "
+                       f"`kubesift drill reveal {d.id} -n {namespace}`. Clean up: `kubesift drill stop -n {namespace}`.",
+                       style="dim"))
+
+
+@drill_app.command("hint")
+def drill_hint(drill_id: str) -> None:
+    """A nudge without giving the answer away."""
+    from kubesift.drills import DRILLS
+
+    console.print(DRILLS[drill_id].hint if drill_id in DRILLS else "unknown drill")
+
+
+@drill_app.command("reveal")
+def drill_reveal(drill_id: str, namespace: str = typer.Option("kubesift-drill", "--namespace", "-n")) -> None:
+    """Show the answer and whether KubeSift caught it."""
+    from kubesift.analysis.engine import investigate
+    from kubesift.drills import DRILLS
+
+    d = DRILLS.get(drill_id)
+    if d is None:
+        _fail("unknown drill")
+    report = investigate(state.settings, _snapshot(namespace), use_llm=False)
+    caught = [f for f in report.findings if f.check in d.expect]
+    console.print(Text(f"Answer: {d.answer}", style="bold green"))
+    if caught:
+        console.print(Text(f"KubeSift caught it: {caught[0].message}", style="green"))
+        if caught[0].related_changes:
+            console.print(Text(f"Triggered by: {caught[0].related_changes[0].summary}", style="magenta"))
+    else:
+        console.print(Text("KubeSift has not detected it yet (some failures take a minute or two to appear).",
+                           style="yellow"))
+
+
+@drill_app.command("stop")
+def drill_stop(namespace: str = typer.Option("kubesift-drill", "--namespace", "-n")) -> None:
+    """Delete the drill namespace (refuses any namespace not created for drills)."""
+    from kubesift.cluster.client import KubeClient, KubeError
+    from kubesift.drills import stop
+
+    s = state.settings
+    try:
+        stop(KubeClient(kubeconfig=s.kubeconfig, context=s.context, timeout=s.request_timeout), namespace)
+    except (KubeError, ValueError) as exc:
+        _fail(str(exc))
+    console.print(f"Deleted drill namespace {namespace}.")
+
+
+@knowledge_app.command("export")
+def knowledge_export(output_file: str = typer.Option("kubesift-knowledge.yaml", "--output", "-o"),
+                     check_id: str | None = typer.Option(None, "--check")) -> None:
+    """Write team notes and runbooks to a YAML pack you can review and share."""
+    import yaml
+
+    from kubesift.knowledge import export_pack
+
+    store = _store()
+    if store is None:
+        _fail("store unavailable")
+    pack = export_pack(store, state.settings.runbooks_dir, check_id)
+    Path(output_file).write_text(yaml.safe_dump(pack, sort_keys=False, allow_unicode=True), encoding="utf-8")
+    console.print(f"Exported {len(pack['notes'])} notes and {len(pack['runbooks'])} runbooks to {output_file}")
+
+
+@knowledge_app.command("import")
+def knowledge_import(pack_file: str) -> None:
+    """Add notes (and runbooks, if runbooks_dir is set) from a knowledge pack. Duplicates are skipped."""
+    import yaml
+
+    from kubesift.knowledge import import_pack
+
+    store = _store()
+    if store is None:
+        _fail("store unavailable")
+    try:
+        pack = yaml.safe_load(Path(pack_file).read_text(encoding="utf-8")) or {}
+        result = import_pack(store, pack, state.settings.runbooks_dir)
+    except ValueError as exc:
+        _fail(str(exc))
+    console.print(f"Added {result['notes_added']} notes, skipped {result['notes_skipped']}, "
+                  f"wrote {result['runbooks_written']} runbooks.")
 
 
 def main() -> Any:

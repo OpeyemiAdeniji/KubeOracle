@@ -32,7 +32,10 @@ CREATE TABLE IF NOT EXISTS audit (
 CREATE TABLE IF NOT EXISTS seen (
   cluster TEXT NOT NULL, fingerprint TEXT NOT NULL, first_seen TEXT, last_seen TEXT,
   PRIMARY KEY (cluster, fingerprint));
-CREATE TABLE IF NOT EXISTS claims (key TEXT PRIMARY KEY, until DOUBLE PRECISION NOT NULL)
+CREATE TABLE IF NOT EXISTS claims (key TEXT PRIMARY KEY, until DOUBLE PRECISION NOT NULL);
+CREATE TABLE IF NOT EXISTS digests (
+  id {serial}, created TEXT NOT NULL, cluster TEXT NOT NULL, namespace TEXT, fingerprint TEXT, body TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS digests_cluster_created ON digests(cluster, created)
 """
 
 
@@ -86,6 +89,7 @@ class Store:
     def prune(self, days: int) -> int:
         """Delete stored investigations older than `days`. Notes and the audit log are kept."""
         cutoff = (now() - timedelta(days=days)).isoformat()
+        self._exec("DELETE FROM digests WHERE created < ?", (cutoff,))
         return self._exec("DELETE FROM reports WHERE created < ?", (cutoff,)).rowcount
 
     def save_report(self, report: Report, source: str = "cli", retention_days: int = 30) -> str:
@@ -143,6 +147,38 @@ class Store:
 
     def list_audit(self, limit: int = 50) -> list[dict[str, Any]]:
         return [dict(r) for r in self._exec("SELECT * FROM audit ORDER BY id DESC LIMIT ?", (limit,)).fetchall()]
+
+    # time travel
+    def save_digest(self, d: dict[str, Any]) -> bool:
+        """Store a cluster digest unless nothing changed since the last one. Returns True if stored."""
+        import base64
+        import gzip
+        import hashlib
+
+        items = json.dumps(d.get("items"), sort_keys=True, default=str)
+        fp = hashlib.sha1(items.encode()).hexdigest()
+        last = self._exec("SELECT fingerprint FROM digests WHERE cluster = ? ORDER BY created DESC LIMIT 1",
+                          (d.get("cluster"),)).fetchone()
+        if last and last["fingerprint"] == fp:
+            return False
+        body = base64.b64encode(gzip.compress(json.dumps(d, default=str).encode())).decode()
+        self._exec("INSERT INTO digests (created, cluster, namespace, fingerprint, body) VALUES (?,?,?,?,?)",
+                   (d.get("time") or now().isoformat(), d.get("cluster"), d.get("namespace"), fp, body))
+        return True
+
+    def digest_before(self, cluster: str, when: datetime) -> dict[str, Any] | None:
+        """The latest stored digest taken at or before `when`."""
+        import base64
+        import gzip
+
+        row = self._exec("SELECT body FROM digests WHERE cluster = ? AND created <= ? ORDER BY created DESC LIMIT 1",
+                         (cluster, when.isoformat())).fetchone()
+        return json.loads(gzip.decompress(base64.b64decode(row["body"]))) if row else None
+
+    def list_digests(self, cluster: str, limit: int = 50) -> list[dict[str, Any]]:
+        rows = self._exec("SELECT id, created, namespace FROM digests WHERE cluster = ? ORDER BY created DESC LIMIT ?",
+                          (cluster, limit)).fetchall()
+        return [dict(r) for r in rows]
 
     # coordination between replicas
     def claim(self, key: str, seconds: float) -> bool:

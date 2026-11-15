@@ -95,6 +95,36 @@ def build_server(settings: Settings) -> MCPServer:
         return json.dumps([f.model_dump(mode="json") for f in lint_text(manifests_yaml, settings, target_version)])
 
     @server.tool(annotations=READ_ONLY)
+    def preflight_manifests(manifests_yaml: str, namespace: str = "default", context: str | None = None) -> str:
+        """Check Kubernetes YAML against the LIVE cluster before deploying: missing Secrets/ConfigMaps/keys,
+        namespaces, StorageClasses, capacity and quota, PDBs, removed env vars, and memory limits below current usage."""
+        from kubesift.lint import _docs_from_text
+        from kubesift.preflight import preflight
+        res = preflight(_docs_from_text(manifests_yaml, "mcp"), snapshot_for(settings, None, context, with_logs=False),
+                        settings, default_namespace=namespace)
+        return json.dumps(res.to_dict(), default=str)
+
+    @server.tool(annotations=READ_ONLY)
+    def cluster_diff(since: str = "1h", namespace: str | None = None, context: str | None = None) -> str:
+        """Time travel: what differs between the cluster now and `since` ago (needs stored history from the
+        in-cluster service or `kubesift snapshot record`)."""
+        from kubesift.timetravel import diff, digest
+        from kubesift.util import now
+        current = digest(snapshot_for(settings, namespace, context, with_logs=False))
+        earlier = store.digest_before(current["cluster"], now() - parse_duration(since))
+        if earlier is None:
+            return json.dumps({"error": f"no stored history from {since} ago"})
+        return json.dumps({"from": earlier.get("time"), "to": current.get("time"), "changes": diff(earlier, current)})
+
+    @server.tool(annotations=READ_ONLY)
+    def draft_postmortem(namespace: str | None = None, since: str = "24h", context: str | None = None) -> str:
+        """Draft a blameless postmortem (impact, timeline, root cause, triggering change, action items) as Markdown."""
+        from kubesift.postmortem import build, to_markdown
+        s = snapshot_for(settings, namespace, context)
+        report = investigate(settings, s, use_llm=False, window=parse_duration(since), store=store)
+        return to_markdown(build(report, s, store.list_audit(200)))
+
+    @server.tool(annotations=READ_ONLY)
     def list_checks() -> str:
         """Every check KubeSift runs, with severity and what it detects."""
         from kubesift.checks import REGISTRY

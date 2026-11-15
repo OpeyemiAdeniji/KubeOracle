@@ -1,6 +1,6 @@
 # Checks
 
-KubeSift runs 60 checks. **Problems** are broken now; **risks** will hurt later. Checks marked *lint* also run on manifest files (`kubesift lint`), without a cluster.
+KubeSift runs 71 checks. **Problems** are broken now; **risks** will hurt later. Checks marked *lint* also run on manifest files (`kubesift lint`), without a cluster.
 
 Regenerate this page with `python scripts/gen_check_docs.py`.
 
@@ -86,6 +86,12 @@ Ready replicas below desired; StatefulSets roll one pod at a time, so one bad po
 
 A pod references a ConfigMap/Secret (or a key in one) that is missing from its namespace.
 
+### config-stale-in-pod
+
+**Pods run with old config values** · medium · problem
+
+A ConfigMap/Secret used through env vars changed after the pod started; env vars are only read at start.
+
 ### image-pull-secret-missing
 
 **imagePullSecret does not exist** · high · problem
@@ -144,11 +150,30 @@ targetPort refers to a named or numbered port the selected pods do not expose.
 
 ## Platform
 
+### apiservice-unavailable
+
+**Extension API is unavailable** · high · problem
+
+An aggregated APIService (metrics-server, custom metrics, ...) is down: it breaks HPAs, `kubectl top`,
+    API discovery and namespace deletion.
+
+### dns-fragile
+
+**Cluster DNS is a single point of failure** · medium · risk
+
+CoreDNS with one replica, or with a CPU limit (throttling made DNS fail cluster-wide in public postmortems).
+
 ### dns-unhealthy
 
 **Cluster DNS is unhealthy** · critical · problem
 
 CoreDNS/kube-dns pods are not ready: every service-name lookup in the cluster may fail.
+
+### namespace-stuck-terminating
+
+**Namespace stuck deleting** · high · problem
+
+A namespace has been Terminating for 10+ minutes, usually a finalizer or an unavailable APIService.
 
 ### platform-warning
 
@@ -163,6 +188,12 @@ Matches recent Warning events against known platform failure patterns.
 A webhook with failurePolicy Fail points at a Service with no ready pods: matching API requests are rejected.
 
 ## Node
+
+### karpenter-nodeclaim-failed
+
+**Karpenter cannot launch nodes** · high · problem
+
+A Karpenter NodeClaim has not become Ready: capacity errors, launch template or IAM problems.
 
 ### node-cordoned
 
@@ -198,6 +229,12 @@ Pod stays Pending; explains the scheduler's reason.
 
 A PVC is Pending or Lost, so pods using it cannot start.
 
+### pvc-stuck-terminating
+
+**Volume claim stuck deleting** · medium · problem
+
+PVC deletion is blocked by kubernetes.io/pvc-protection because a pod still mounts it.
+
 ### volume-mount-failed
 
 **Volume cannot be attached or mounted** · high · problem
@@ -211,6 +248,12 @@ FailedMount / FailedAttachVolume events on pods that are not running.
 **Autoscaler cannot read metrics** · high · problem
 
 ScalingActive=False: missing metrics-server, missing resource requests, or a bad custom metric.
+
+### hpa-flapping
+
+**Autoscaler keeps scaling up and down** · medium · problem
+
+Frequent alternating rescales in the last hour: pods start and stop constantly, hurting latency and cost.
 
 ### hpa-maxed-out
 
@@ -292,6 +335,19 @@ Without a PDB, node drains during upgrades can evict all replicas at once.
 
 One replica means downtime on every deploy, node drain and crash.
 
+### replicas-single-node
+
+**All replicas on one node or zone** · medium · risk
+
+Several replicas but every pod is on the same node (or zone): one failure takes the whole app down.
+
+### rollout-drops-traffic
+
+**Rollouts can drop live traffic (502s)** · medium · risk · lint
+
+Pods behind a Service with no preStop delay stop before load balancers stop routing to them,
+    so every deploy returns 502s / connection resets for a few seconds.
+
 ## Security
 
 ### certificate-expiring
@@ -312,6 +368,12 @@ cert-manager cannot issue or renew a Certificate (DNS/HTTP challenge, issuer or 
 
 A pod token with cluster-admin means anyone who compromises the pod owns the cluster.
 
+### security-no-network-policy
+
+**Namespaces with no NetworkPolicy** · low · risk
+
+Without any NetworkPolicy every pod can reach every other pod: one compromised pod reaches all of them.
+
 ### security-plaintext-secret
 
 **Secret value written directly in env** · high · risk · lint
@@ -323,6 +385,12 @@ An env var named like a password/token has a literal value: it is visible to any
 **Privileged or host-level access** · high · risk · lint
 
 privileged, hostNetwork/hostPID/hostIPC, hostPath or dangerous capabilities: a container escape means node takeover.
+
+### security-pss-not-enforced
+
+**Pod Security Standards not enforced** · low · risk
+
+Application namespaces without a pod-security.kubernetes.io/enforce label accept privileged pods.
 
 ### security-runs-as-root
 

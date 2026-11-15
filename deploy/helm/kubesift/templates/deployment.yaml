@@ -76,11 +76,15 @@ spec:
               value: {{ .Values.scan.notifyMinSeverity | quote }}
             - name: KUBESIFT_ALLOW_WRITES
               value: {{ .Values.rbac.allowWrites | quote }}
+            {{- with .Values.slack.allowedUsers }}
+            - name: KUBESIFT_SLACK_ALLOWED_USERS
+              value: {{ join "," . | quote }}
+            {{- end }}
             {{- with .Values.notifications.webhookUrl }}
             - name: KUBESIFT_WEBHOOK_URL
               value: {{ . | quote }}
             {{- end }}
-            {{- range $env, $key := dict "KUBESIFT_API_TOKEN" "api-token" "ANTHROPIC_API_KEY" "anthropic-api-key" "OPENAI_API_KEY" "openai-api-key" "OPENROUTER_API_KEY" "openrouter-api-key" "KUBESIFT_SLACK_WEBHOOK_URL" "slack-webhook-url" "KUBESIFT_TEAMS_WEBHOOK_URL" "teams-webhook-url" }}
+            {{- range $env, $key := dict "KUBESIFT_API_TOKEN" "api-token" "ANTHROPIC_API_KEY" "anthropic-api-key" "OPENAI_API_KEY" "openai-api-key" "OPENROUTER_API_KEY" "openrouter-api-key" "KUBESIFT_SLACK_WEBHOOK_URL" "slack-webhook-url" "KUBESIFT_TEAMS_WEBHOOK_URL" "teams-webhook-url" "KUBESIFT_SLACK_SIGNING_SECRET" "slack-signing-secret" }}
             - name: {{ $env }}
               valueFrom:
                 secretKeyRef:
