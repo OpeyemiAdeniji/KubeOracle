@@ -27,6 +27,7 @@ _KEY_ENV = {
     "anthropic": "ANTHROPIC_API_KEY",
     "openai": "OPENAI_API_KEY",
     "openrouter": "OPENROUTER_API_KEY",
+    "ollama": "OLLAMA_API_KEY",  # only for Ollama's hosted API; a local server needs no key
 }
 
 
@@ -43,6 +44,8 @@ class Settings(BaseModel):
     llm_base_url: str | None = None
     llm_api_key: str | None = Field(default=None, repr=False)
     llm_effort: str = "medium"
+    llm_timeout: int | None = None  # seconds to wait for an answer; default 180 (hosted) or 900 (ollama)
+    llm_context: int | None = None  # ollama only: context window in tokens; default sized to the prompt
     send_logs_to_llm: bool = True
 
     # Optional data sources
@@ -98,6 +101,12 @@ class Settings(BaseModel):
 
     def resolved_base_url(self) -> str | None:
         return self.llm_base_url or _DEFAULT_BASE_URLS.get(self.resolved_provider())
+
+    def resolved_llm_timeout(self) -> float:
+        if self.llm_timeout:
+            return float(self.llm_timeout)
+        # local models on a laptop CPU can need many minutes for one answer
+        return 900.0 if self.resolved_provider() == "ollama" else 180.0
 
     def resolved_api_key(self) -> str | None:
         if self.llm_api_key:

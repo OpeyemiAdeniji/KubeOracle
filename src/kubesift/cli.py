@@ -39,6 +39,14 @@ class State:
 state = State()
 
 
+def _print_version(value: bool) -> None:
+    if value:
+        from kubesift import __version__
+
+        print(f"kubesift {__version__}")
+        raise typer.Exit()
+
+
 @app.callback()
 def main_options(
     kubeconfig: str | None = typer.Option(None, "--kubeconfig", envvar="KUBECONFIG_PATH", help="Path to kubeconfig."),
@@ -46,6 +54,8 @@ def main_options(
     llm: str | None = typer.Option(None, "--llm-provider", help="anthropic | openai | openrouter | ollama | none"),
     model: str | None = typer.Option(None, "--model", help="LLM model name."),
     prometheus: str | None = typer.Option(None, "--prometheus", help="Prometheus URL for usage history."),
+    version: bool = typer.Option(False, "--version", "-V", is_eager=True, callback=_print_version,
+                                 help="Show the version and exit."),
 ) -> None:
     state.settings = load_settings(kubeconfig=kubeconfig, context=context, llm_provider=llm, llm_model=model,
                                    prometheus_url=prometheus)
@@ -56,12 +66,32 @@ def _fail(msg: str, code: int = 1) -> NoReturn:
     raise typer.Exit(code)
 
 
-def _snapshot(namespace: str | None, from_file: str | None = None, with_logs: bool = True):
+def _load_snapshot_file(path: str):
     from kubesift.cluster.snapshot import Snapshot
 
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        _fail(f"snapshot file not found: {path}")
+    except (OSError, UnicodeDecodeError) as exc:
+        _fail(f"cannot read {path}: {exc}")
+    except json.JSONDecodeError as exc:
+        _fail(f"{path} is not a KubeSift snapshot (invalid JSON: {exc})")
+    if not isinstance(data, dict) or "objects" not in data:
+        _fail(f"{path} is not a KubeSift snapshot (create one with: kubesift snapshot save)")
+    return Snapshot.from_dict(data)
+
+
+def _llm_status(text: str, use_llm: bool) -> str:
+    if use_llm and state.settings.resolved_provider() == "ollama":
+        return f"{text} (local model: this can take several minutes without a GPU)"
+    return text
+
+
+def _snapshot(namespace: str | None, from_file: str | None = None, with_logs: bool = True):
+
     if from_file:
-        data = json.loads(Path(from_file).read_text(encoding="utf-8"))
-        snap = Snapshot.from_dict(data)
+        snap = _load_snapshot_file(from_file)
         if namespace:
             snap.namespace = namespace
         return snap
@@ -126,7 +156,7 @@ def diagnose(
 
     snap = _snapshot(namespace, from_file)
     store = _store()
-    with err.status("Analysing…"):
+    with err.status(_llm_status("Analysing…", llm)):
         report = investigate(state.settings, snap, use_llm=llm, window=parse_duration(since), store=store)
     if store:
         store.save_report(report, retention_days=state.settings.history_days)
@@ -175,7 +205,7 @@ def ask(
         ns = mentioned_namespace(q, [n.get("metadata", {}).get("name", "") for n in snap.all("namespaces")])
         if ns:
             snap.namespace = ns
-    with err.status("Thinking…"):
+    with err.status(_llm_status("Thinking…", llm)):
         report, answer = do_ask(state.settings, snap, q, use_llm=llm, store=_store())
     if output == "json":
         print(json.dumps({"answer": answer, "report": report.model_dump(mode="json")}, indent=2, default=str))
@@ -537,6 +567,11 @@ def doctor() -> None:
     if provider == "none":
         line(None, "no LLM configured: rule-based diagnosis only (set ANTHROPIC_API_KEY, OPENAI_API_KEY, "
                    "OPENROUTER_API_KEY or KUBESIFT_LLM_PROVIDER=ollama)")
+    elif provider == "ollama":
+        from kubesift.analysis.llm import OllamaProvider
+
+        ready, detail = OllamaProvider(s).status()
+        line(True if ready else None, f"LLM: {detail}")
     else:
         line(True, f"LLM: {provider} / {s.resolved_model()}")
     line(True if s.prometheus_url else None, f"Prometheus: {s.prometheus_url or 'not configured (optional)'}")
@@ -665,17 +700,13 @@ def diff(
     output: str = OUT,
 ) -> None:
     """Time travel: what is different between two moments (stored history or snapshot files)."""
-    from kubesift.cluster.snapshot import Snapshot
     from kubesift.timetravel import diff as do_diff
     from kubesift.timetravel import digest
     from kubesift.util import now, parse_duration
 
-    if to_file:
-        later = Snapshot.from_dict(json.loads(Path(to_file).read_text(encoding="utf-8")))
-    else:
-        later = _snapshot(namespace, with_logs=False)
+    later = _load_snapshot_file(to_file) if to_file else _snapshot(namespace, with_logs=False)
     if from_file:
-        earlier = digest(Snapshot.from_dict(json.loads(Path(from_file).read_text(encoding="utf-8"))))
+        earlier = digest(_load_snapshot_file(from_file))
     elif since:
         store = _store()
         earlier = store.digest_before(later.context, now() - parse_duration(since)) if store else None
@@ -853,8 +884,10 @@ def knowledge_import(pack_file: str) -> None:
     try:
         pack = yaml.safe_load(Path(pack_file).read_text(encoding="utf-8")) or {}
         result = import_pack(store, pack, state.settings.runbooks_dir)
-    except ValueError as exc:
-        _fail(str(exc))
+    except FileNotFoundError:
+        _fail(f"knowledge pack not found: {pack_file}")
+    except (OSError, ValueError, yaml.YAMLError) as exc:
+        _fail(f"cannot import {pack_file}: {exc}")
     console.print(f"Added {result['notes_added']} notes, skipped {result['notes_skipped']}, "
                   f"wrote {result['runbooks_written']} runbooks.")
 

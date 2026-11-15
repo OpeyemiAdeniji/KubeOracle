@@ -60,6 +60,10 @@ spec:
             - name: KUBESIFT_LLM_BASE_URL
               value: {{ . | quote }}
             {{- end }}
+            {{- with .Values.llm.timeout }}
+            - name: KUBESIFT_LLM_TIMEOUT
+              value: {{ . | quote }}
+            {{- end }}
             - name: KUBESIFT_SEND_LOGS_TO_LLM
               value: {{ .Values.llm.sendLogs | quote }}
             {{- with .Values.prometheus.url }}

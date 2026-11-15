@@ -23,7 +23,8 @@ existingSecret: ""
 llm:
   provider: none     # anthropic | openai | openrouter | ollama | none
   model: ""
-  baseUrl: ""        # e.g. http://ollama.ollama:11434/v1
+  baseUrl: ""        # e.g. http://ollama.ollama:11434 for Ollama
+  timeout: 0         # seconds to wait for one answer; 0 = default (180, Ollama 900)
   anthropicApiKey: ""
   openaiApiKey: ""
   openrouterApiKey: ""
