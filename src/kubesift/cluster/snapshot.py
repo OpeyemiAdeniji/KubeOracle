@@ -76,6 +76,10 @@ _ERROR_LINE = re.compile(
 )
 
 
+_NOT_LOGS = re.compile(r"(?i)^(unable to retrieve container logs|failed to try resolving symlinks|"
+                       r"previous terminated container .* not found|container .* is waiting to start)")
+
+
 @dataclass
 class Snapshot:
     context: str = "offline"
@@ -227,6 +231,9 @@ def collect(
     with_logs: bool = True,
     kinds: set[str] | None = None,
 ) -> Snapshot:
+    from kubesift.util import check_name
+
+    check_name(namespace, "namespace")
     snap = Snapshot(context=client.context_name, namespace=namespace, live=True)
     snap.server_version = client.server_version()
 
@@ -291,11 +298,30 @@ def _shrink(obj: dict[str, Any]) -> None:
     if applied:
         with contextlib.suppress(ValueError):
             ann[APPLIED_API] = json.loads(applied).get("apiVersion", "")
+    _redact_env(obj)
     mf = m.pop("managedFields", None)
     if mf and obj.get("kind") in CHANGE_TRACKED:
         # keep only who changed the object and when; used by `kubesift changes`
         m["managedFields"] = [{"manager": f.get("manager"), "operation": f.get("operation"), "time": f.get("time"),
                                "subresource": f.get("subresource")} for f in mf]
+
+
+def _redact_env(obj: dict[str, Any]) -> None:
+    """Literal env values are part of pod specs, not Secrets; mask the ones that look like credentials."""
+    from kubesift.redact import SECRET_ENV_NAME
+    from kubesift.util import containers_of, pod_spec_of
+
+    spec = pod_spec_of(obj) if obj.get("kind") in ("Pod", "Deployment", "StatefulSet", "DaemonSet", "Job",
+                                                   "CronJob", "ReplicaSet") else None
+    for c in containers_of(spec, include_init=True):
+        for env in c.get("env") or []:
+            value = env.get("value")
+            if not isinstance(value, str) or not value:
+                continue
+            if SECRET_ENV_NAME.search(env.get("name", "")):
+                env["value"] = "[REDACTED]"
+            else:
+                env["value"] = redact(value)
 
 
 def _sanitize_configmap(cm: dict[str, Any]) -> dict[str, Any]:
@@ -465,20 +491,23 @@ def collect_logs(client: KubeClient, snap: Snapshot, max_containers: int = 25) -
             targets.append((meta(pod).get("namespace", ""), meta(pod).get("name", ""), container, previous))
     targets = targets[:max_containers]
 
-    def fetch(t: tuple[str, str, str, bool]) -> None:
-        ns, pod, container, previous = t
+    def read(ns: str, pod: str, container: str, previous: bool) -> str | None:
         try:
             text = client.pod_logs(ns, pod, container, previous=previous)
-        except KubeError:
-            if not previous:
-                return
-            try:
-                text = client.pod_logs(ns, pod, container, previous=False)
-            except Exception:
-                return
         except Exception:
-            return
-        snap.logs[f"{ns}/{pod}/{container}"] = {"previous": previous, **summarize_log(text)}
+            return None
+        # The API answers 200 with an error sentence when the runtime has already removed the old container.
+        if not text.strip() or _NOT_LOGS.match(text.lstrip()):
+            return None
+        return text
+
+    def fetch(t: tuple[str, str, str, bool]) -> None:
+        ns, pod, container, previous = t
+        for prev in ((True, False) if previous else (False,)):
+            text = read(ns, pod, container, prev)
+            if text is not None:
+                snap.logs[f"{ns}/{pod}/{container}"] = {"previous": prev, **summarize_log(text)}
+                return
 
     with ThreadPoolExecutor(max_workers=6) as pool:
         list(pool.map(fetch, targets))

@@ -11,7 +11,8 @@ Investigate from the channel where the incident is being discussed:
 
 When a recent rollout is the likely cause, the answer has a **Roll back (dry run)** button. It runs a
 server-side dry run first. An **Apply for real** button appears only when the server has
-`allow_writes` enabled and the Slack user is in `slack_allowed_users`. Every action is in the audit log with
+`allow_writes` enabled **and** the Slack user is listed in `slack_allowed_users` (an empty list means nobody
+can apply from Slack). Every action is in the audit log with
 the Slack user ID.
 
 ## Setup (about 5 minutes)
@@ -26,7 +27,7 @@ the Slack user ID.
 ```yaml
 slack:
   signingSecret: "<signing secret>"
-  allowedUsers: ["U0123ABC"]   # optional: who may apply fixes
+  allowedUsers: ["U0123ABC"]   # who may apply fixes; empty = nobody (dry runs still work)
 rbac:
   allowWrites: false           # true to allow Apply (dry runs always work)
 ingress:

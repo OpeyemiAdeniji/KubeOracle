@@ -78,10 +78,13 @@ def removed_apis(ctx: Context) -> Iterator[Finding]:
         if target is not None and target < removed_in - 2:
             continue
         gone = target is None or target >= removed_in
+        msg = f"{kind} uses {api}, {'removed' if gone else 'to be removed'} in Kubernetes 1.{removed_in}. Use {replacement}."
+        if ctx.snap.live:
+            msg += (" The object itself was converted and keeps running, but re-applying the original manifest "
+                    "or Helm chart will fail.") if gone else " Update the source manifest before upgrading."
         yield ctx.finding(
-            "api-removed", ref,
-            f"{kind} uses {api}, {'removed' if gone else 'to be removed'} in Kubernetes 1.{removed_in}. Use {replacement}.",
-            severity=Severity.CRITICAL if gone and ctx.snap.live else Severity.HIGH,
+            "api-removed", ref, msg,
+            severity=Severity.HIGH,
             evidence=[f"source: {source}"],
             remediation=(f"Update the manifest/chart to {replacement}. For Helm releases whose stored manifest has the old "
                          "API, upgrade the chart; if upgrades fail, use the helm-mapkubeapis plugin."),

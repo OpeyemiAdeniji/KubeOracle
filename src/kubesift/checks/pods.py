@@ -139,8 +139,8 @@ def crashloop(ctx: Context) -> Iterator[Finding]:
             if code == 137 and _liveness_killed(ctx, pod):
                 hints.insert(0, "The liveness probe is failing and the kubelet kills the container; "
                                 "the app may be slow to start (add a startupProbe) or the probe checks the wrong port/path.")
-            msg = f"Container '{name}' keeps crashing ({cs.get('restartCount', 0)} restarts)"
-            msg += f" (exit code {code})." if code is not None else "."
+            msg = f"Container '{name}' keeps crashing ({cs.get('restartCount', 0)} restarts"
+            msg += f", last exit code {code})." if code is not None else ")."
             if hints:
                 msg += " " + hints[0]
             yield ctx.finding(

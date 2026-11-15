@@ -113,6 +113,18 @@ def label_selector_matches(selector: dict[str, Any] | None, labels: dict[str, st
     return True
 
 
+_DNS_NAME = re.compile(r"^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$")
+
+
+def check_name(value: str | None, what: str = "name") -> str | None:
+    """Reject anything that is not a valid Kubernetes object/namespace name before it goes into an API path."""
+    if value is None or value == "":
+        return value
+    if not _DNS_NAME.match(value) or ".." in value:
+        raise ValueError(f"invalid {what} {value!r}: must be a lowercase DNS name (a-z, 0-9, '-', '.')")
+    return value
+
+
 def meta(obj: dict[str, Any]) -> dict[str, Any]:
     return obj.get("metadata") or {}
 

@@ -77,7 +77,7 @@ class Settings(BaseModel):
     teams_webhook_url: str | None = Field(default=None, repr=False)
     webhook_url: str | None = Field(default=None, repr=False)
     slack_signing_secret: str | None = Field(default=None, repr=False)  # enables /api/v1/slack/* endpoints
-    slack_allowed_users: list[str] = Field(default_factory=list)  # Slack user IDs allowed to apply fixes
+    slack_allowed_users: list[str] = Field(default_factory=list)  # Slack user IDs allowed to apply fixes (empty = nobody)
 
     # Namespaces skipped by default when scanning all namespaces for hygiene checks
     system_namespaces: list[str] = Field(

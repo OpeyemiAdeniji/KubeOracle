@@ -6,7 +6,7 @@ import contextlib
 import json
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 import typer
 from rich.console import Console
@@ -51,7 +51,7 @@ def main_options(
                                    prometheus_url=prometheus)
 
 
-def _fail(msg: str, code: int = 1) -> None:
+def _fail(msg: str, code: int = 1) -> NoReturn:
     err.print(Text(f"error: {msg}", style="bold red"))
     raise typer.Exit(code)
 

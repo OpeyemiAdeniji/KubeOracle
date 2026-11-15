@@ -137,6 +137,7 @@ def _describe(key: str, old: dict[str, Any], new: dict[str, Any]) -> list[str]:
 
 def diff(a: dict[str, Any], b: dict[str, Any]) -> list[dict[str, Any]]:
     """Changes from digest a (earlier) to digest b (later), most interesting first."""
+    a, b = json.loads(json.dumps(a, default=str)), json.loads(json.dumps(b, default=str))
     ia, ib = a.get("items") or {}, b.get("items") or {}
     out = []
     for key in sorted(set(ia) | set(ib)):

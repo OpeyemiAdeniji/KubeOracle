@@ -34,6 +34,12 @@ class Plan:
 
 
 def plan(client: KubeClient, action: str, kind: str, namespace: str, name: str, replicas: int | None = None) -> Plan:
+    from kubesift.util import check_name
+
+    if not namespace or not name:
+        raise ValueError("namespace and name are required")
+    check_name(namespace, "namespace")
+    check_name(name)
     kind = kind.lower()
     target = f"{kind}/{namespace}/{name}"
     if action == "delete-pod":

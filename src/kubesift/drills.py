@@ -66,6 +66,9 @@ def _docs(file: str) -> list[dict[str, Any]]:
 
 
 def ensure_namespace(client: KubeClient, namespace: str) -> None:
+    from kubesift.util import check_name
+
+    check_name(namespace, "namespace")
     try:
         ns = client.get(f"/api/v1/namespaces/{namespace}")
     except KubeError as exc:
@@ -110,6 +113,9 @@ def start(client: KubeClient, drill_id: str, namespace: str, wait: float = 120.0
 
 
 def stop(client: KubeClient, namespace: str) -> None:
+    from kubesift.util import check_name
+
+    check_name(namespace, "namespace")
     ns = client.get(f"/api/v1/namespaces/{namespace}")
     if ((ns.get("metadata") or {}).get("labels") or {}).get(DRILL_LABEL) != "true":
         raise ValueError(f"refusing to delete {namespace}: it is not a drill namespace")

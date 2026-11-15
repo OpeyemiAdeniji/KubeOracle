@@ -22,6 +22,7 @@ from kubesift.cluster.snapshot import KIND_TO_KEY, KINDS, Snapshot
 from kubesift.config import Settings
 from kubesift.models import Category, Finding, ResourceRef, Severity
 from kubesift.util import (
+    check_name,
     containers_of,
     fmt_bytes,
     fmt_cpu,
@@ -51,7 +52,17 @@ class PreflightResult:
 def _f(check: str, title: str, sev: Severity, cat: Category, ref: ResourceRef, msg: str, fix: str = "",
        evidence: list[str] | None = None, source: str | None = None) -> Finding:
     return Finding(check=check, title=title, severity=sev, category=cat, resource=ref, owner=ref, message=msg,
-                   remediation=fix, evidence=evidence or [], source=source, docs=f"{DOCS_URL}#preflight")
+                   remediation=fix, evidence=evidence or [], source=source, docs=DOCS_URL.replace("checks.md", "preflight.md"))
+
+
+_CLUSTER_SCOPED = {kind for _, kind, _, _, namespaced, _ in KINDS if not namespaced} | {
+    "CustomResourceDefinition", "PriorityClass", "RuntimeClass", "CSIDriver", "VolumeSnapshotClass",
+    "GatewayClass", "ClusterIssuer", "NodePool", "EC2NodeClass", "PodSecurityPolicy", "ValidatingAdmissionPolicy",
+    "ValidatingAdmissionPolicyBinding", "MutatingAdmissionPolicy", "MutatingAdmissionPolicyBinding"}
+
+
+def _namespaced(kind: str) -> bool:
+    return kind not in _CLUSTER_SCOPED and not kind.startswith("Cluster")
 
 
 def _ref(doc: dict[str, Any]) -> ResourceRef:
@@ -79,8 +90,7 @@ def preflight(docs: list[dict[str, Any]], live: Snapshot, settings: Settings, *,
               client: KubeClient | None = None, server_dry_run: bool = False,
               check_images: bool = False) -> PreflightResult:
     for d in docs:
-        key = KIND_TO_KEY.get(d.get("kind", ""))
-        if key not in {k for k, _, _, _, namespaced, _ in KINDS if not namespaced}:
+        if _namespaced(d.get("kind", "")):
             d.setdefault("metadata", {}).setdefault("namespace", default_namespace)
             if not d["metadata"].get("namespace"):
                 d["metadata"]["namespace"] = default_namespace
@@ -222,20 +232,26 @@ def _capacity(docs: list[dict[str, Any]], live: Snapshot) -> list[Finding]:
                           f"free right now ({detail}). New pods will stay Pending unless the autoscaler adds nodes.",
                           "Lower the requests, free capacity, or confirm the cluster autoscaler can add a node this size.",
                           source=_source(d)))
-        # ResourceQuota headroom for the whole workload
+        # ResourceQuota headroom: only the increase over what the running version already uses counts
         ns = meta(d).get("namespace")
+        key = KIND_TO_KEY.get(d.get("kind", ""))
+        cur = live.get(key, ns, meta(d).get("name", "")) if key else None
+        old_cpu, old_mem = _pod_requests(pod_spec_of(cur) or {}) if cur else (0.0, 0.0)
+        old_n = _replicas(cur) if cur else 0
         for q in live.in_namespace("resourcequotas", ns):
             hard, usedq = (q.get("status") or {}).get("hard") or {}, (q.get("status") or {}).get("used") or {}
-            for res_name, need in (("requests.cpu", cpu), ("requests.memory", mem)):
-                if res_name in hard:
-                    left = parse_quantity(hard[res_name]) - parse_quantity(usedq.get(res_name))
-                    total = need * _replicas(d)
-                    if total > left > -1:
-                        out.append(_f("preflight-quota-exceeded", "ResourceQuota too small for this change",
-                                      Severity.HIGH, Category.RESOURCES, _ref(d),
-                                      f"Needs {total:g} more {res_name} but quota {meta(q).get('name')} has {max(left, 0):g} left; "
-                                      "new pods will be rejected.", "Raise the quota or lower requests/replicas.",
-                                      source=_source(d)))
+            for res_name, need, old in (("requests.cpu", cpu, old_cpu), ("requests.memory", mem, old_mem)):
+                if res_name not in hard:
+                    continue
+                left = parse_quantity(hard[res_name]) - parse_quantity(usedq.get(res_name))
+                extra = need * _replicas(d) - old * old_n
+                if extra > 0 and extra > left:
+                    human = fmt_bytes if "memory" in res_name else fmt_cpu
+                    out.append(_f("preflight-quota-exceeded", "ResourceQuota too small for this change",
+                                  Severity.HIGH, Category.RESOURCES, _ref(d),
+                                  f"Needs {human(extra)} more {res_name} but quota {meta(q).get('name')} has "
+                                  f"{human(max(left, 0))} left; new pods will be rejected.",
+                                  "Raise the quota or lower requests/replicas.", source=_source(d)))
         # PodDisruptionBudgets that will block every drain
         labels = (((d.get("spec") or {}).get("template") or {}).get("metadata") or {}).get("labels") or {}
         for pdb in live.in_namespace("pdbs", ns) + [x for x in docs if x.get("kind") == "PodDisruptionBudget"
@@ -297,6 +313,26 @@ def _diff_live(docs: list[dict[str, Any]], live: Snapshot) -> tuple[list[dict[st
 _TAG = re.compile(r"^(?:(?P<reg>[^/]+\.[^/]+|localhost(?::\d+)?)/)?(?P<repo>[^:@]+)(?::(?P<tag>[^@]+))?(?:@(?P<digest>.+))?$")
 
 
+def _public_https(url: str) -> bool:
+    """Only talk to public registries over HTTPS: never loopback, private, link-local or metadata addresses."""
+    import ipaddress
+    import socket
+    from urllib.parse import urlparse
+
+    u = urlparse(url)
+    if u.scheme != "https" or not u.hostname:
+        return False
+    try:
+        infos = socket.getaddrinfo(u.hostname, u.port or 443, proto=socket.IPPROTO_TCP)
+    except OSError:
+        return False
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0])
+        if not ip.is_global or ip.is_multicast:
+            return False
+    return True
+
+
 def image_exists(image: str, timeout: float = 10.0) -> bool | None:
     """True/False if the registry answered, None if it could not be checked (private, unreachable)."""
     m = _TAG.match(image)
@@ -312,11 +348,15 @@ def image_exists(image: str, timeout: float = 10.0) -> bool | None:
     url = f"https://{reg}/v2/{repo}/manifests/{ref}"
     accept = ", ".join(["application/vnd.oci.image.index.v1+json", "application/vnd.docker.distribution.manifest.list.v2+json",
                         "application/vnd.oci.image.manifest.v1+json", "application/vnd.docker.distribution.manifest.v2+json"])
+    if not _public_https(url):
+        return None
     try:
-        with httpx.Client(timeout=timeout, follow_redirects=True) as http:
+        with httpx.Client(timeout=timeout, follow_redirects=False) as http:
             r = http.head(url, headers={"Accept": accept})
             if r.status_code == 401 and "bearer" in r.headers.get("www-authenticate", "").lower():
                 params = dict(re.findall(r'(\w+)="([^"]*)"', r.headers["www-authenticate"]))
+                if not _public_https(params.get("realm", "")):
+                    return None  # the token endpoint is chosen by the registry: check it too
                 tok = http.get(params.get("realm", ""), params={"service": params.get("service"),
                                                                 "scope": params.get("scope", f"repository:{repo}:pull")})
                 if tok.status_code != 200:
@@ -354,8 +394,15 @@ def _api_path(doc: dict[str, Any]) -> str | None:
     if entry is None:
         return None
     _, _, prefix, plural, namespaced, _ = entry
+    if not re.match(r"^[a-z0-9.-]+(/v[0-9a-z]+)?$|^v1$", api):
+        return None
     prefix = "/api/v1" if api == "v1" else f"/apis/{api}"
     name = meta(doc).get("name", "")
+    try:
+        check_name(name)
+        check_name(meta(doc).get("namespace"), "namespace")
+    except ValueError:
+        return None
     if namespaced:
         return f"{prefix}/namespaces/{meta(doc).get('namespace')}/{plural}/{name}"
     return f"{prefix}/{plural}/{name}"

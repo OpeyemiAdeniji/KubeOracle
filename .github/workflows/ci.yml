@@ -36,6 +36,16 @@ jobs:
       - run: ruff check src tests
       - run: pytest --cov=kubesift --cov-report=term-missing
 
+  workflows:
+    # A broken workflow file is only noticed when it runs; for the release workflow that is too late.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: actionlint
+        run: |
+          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7
+          ./actionlint -color
+
   oldest-deps:
     # The Kubernetes client changed its low-level API in v37; keep supporting older releases.
     runs-on: ubuntu-latest

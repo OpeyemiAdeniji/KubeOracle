@@ -84,6 +84,11 @@ def create_app(settings: Settings) -> FastAPI:
 
     app = FastAPI(title="KubeSift", version=__version__, lifespan=lifespan,
                   description="Evidence-based Kubernetes troubleshooting API.")
+
+    @app.exception_handler(ValueError)
+    async def bad_input(_: Request, exc: ValueError) -> Any:
+        from fastapi.responses import JSONResponse
+        return JSONResponse({"detail": str(exc)}, status_code=400)  # e.g. since=abc, invalid names
     store = open_store(settings)
     if settings.cors_origins:
         app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_methods=["GET", "POST"],
@@ -102,7 +107,17 @@ def create_app(settings: Settings) -> FastAPI:
     locks: dict[tuple, threading.Lock] = defaultdict(threading.Lock)
 
     def snap(namespace: str | None, context: str | None, with_logs: bool = True):
+        from kubesift.util import check_name
+        try:
+            check_name(namespace, "namespace")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         key = (namespace, context, with_logs)
+        now_t = time.monotonic()
+        for k in [k for k, v in list(cache.items()) if now_t - v[0] > settings.cache_ttl]:
+            cache.pop(k, None)  # drop expired snapshots so memory doesn't grow with every namespace queried
+        if len(locks) > 512:
+            locks.clear()
         try:
             with locks[key]:
                 hit = cache.get(key)
@@ -220,7 +235,15 @@ def create_app(settings: Settings) -> FastAPI:
         """Alertmanager webhook receiver: investigates the namespaces of firing alerts and posts the diagnosis."""
         payload = await request.json()
         firing = [a for a in payload.get("alerts") or [] if a.get("status") == "firing"]
-        namespaces = sorted({(a.get("labels") or {}).get("namespace") for a in firing} - {None})
+        from kubesift.util import check_name
+
+        def _valid(ns: Any) -> bool:
+            try:
+                return isinstance(ns, str) and bool(check_name(ns))
+            except ValueError:
+                return False
+        namespaces = sorted({(a.get("labels") or {}).get("namespace") for a in firing if
+                             _valid((a.get("labels") or {}).get("namespace"))})
         names = ", ".join(sorted({(a.get("labels") or {}).get("alertname", "?") for a in firing}))
         # Alert storms fire the same alert many times; investigate each namespace at most once per cooldown.
         # The claim lives in the database, so replicas behind one Service don't duplicate the work.
@@ -288,6 +311,17 @@ def create_app(settings: Settings) -> FastAPI:
         from kubesift import slack
         form = {k: v[0] for k, v in parse_qs((await _slack_verified(request)).decode()).items()}
         verb, args = slack.parse(form.get("text", ""))
+        from kubesift.util import check_name, parse_duration
+        try:
+            if verb in ("diagnose", "changes", "postmortem") and args:
+                check_name(args[0], "namespace")
+            if verb == "changes" and len(args) > 1:
+                parse_duration(args[1])
+            if verb == "why":
+                for a in args[:2]:
+                    check_name(a)
+        except ValueError as exc:
+            return {"response_type": "ephemeral", "text": f":x: {exc}"}
         if verb not in ("diagnose", "why", "changes", "postmortem"):
             return {"response_type": "ephemeral", "text": slack.HELP}
         background.add_task(_slack_work, settings, store, verb, args, form.get("response_url", ""))
@@ -433,7 +467,8 @@ def _slack_fix(settings: Settings, store: Store, value: dict[str, Any], user: st
     from kubesift import slack
     from kubesift.cluster.client import KubeError
     from kubesift.remediate import execute, plan
-    may_apply = settings.allow_writes and (not settings.slack_allowed_users or user in settings.slack_allowed_users)
+    # Applying from Slack needs both allow_writes and the user on an explicit allowlist (empty list = nobody).
+    may_apply = bool(settings.allow_writes and user and user in settings.slack_allowed_users)
     dry_run = bool(value.get("dry_run", True)) or not may_apply
     try:
         client = KubeClient(kubeconfig=settings.kubeconfig, context=settings.context, timeout=settings.request_timeout)

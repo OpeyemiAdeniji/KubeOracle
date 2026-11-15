@@ -146,11 +146,12 @@ def rules_diagnosis(report: Report) -> Diagnosis:
     return Diagnosis(summary=summary, root_causes=causes, generated_by="rules")
 
 
-def _finding_payload(f: Finding) -> dict[str, Any]:
+def _finding_payload(f: Finding, logs: bool = True) -> dict[str, Any]:
+    evidence = [e for e in f.evidence if logs or not e.startswith("log ")]
     return {
         "fingerprint": f.fingerprint, "check": f.check, "severity": f.severity.value, "resource": str(f.resource),
         "owner": str(f.owner) if f.owner else None, "node": f.node, "message": f.message,
-        "evidence": f.evidence[:8], "suggested_fix": f.remediation, "commands": f.commands[:3],
+        "evidence": evidence[:8], "suggested_fix": f.remediation, "commands": f.commands[:3],
         "started": f.since.isoformat() if f.since else None,
         "related_changes": [c.summary + (f" [rollback: {c.rollback_command}]" if c.rollback_command else "")
                             for c in f.related_changes],
@@ -158,11 +159,11 @@ def _finding_payload(f: Finding) -> dict[str, Any]:
     }
 
 
-def _context_json(report: Report, extra: dict[str, Any] | None = None) -> str:
+def _context_json(report: Report, extra: dict[str, Any] | None = None, logs: bool = True) -> str:
     payload: dict[str, Any] = {
         "cluster": report.cluster, "namespace": report.namespace or "all", "kubernetes": report.server_version,
         "incidents": [{"title": i.title, "layer": i.layer, "severity": i.severity.value,
-                       "findings": [_finding_payload(f) for f in i.findings[:6]]} for i in report.incidents[:12]],
+                       "findings": [_finding_payload(f, logs) for f in i.findings[:6]]} for i in report.incidents[:12]],
         "risks": [{"fingerprint": f.fingerprint, "check": f.check, "resource": str(f.resource), "message": f.message}
                   for f in report.findings if f.kind == "risk"][:25],
         "recent_changes": [{"time": c.time.isoformat(), "summary": c.summary, "details": c.details[:5],
@@ -190,11 +191,9 @@ def explain(settings: Settings, report: Report, use_llm: bool = True) -> Diagnos
         return base
     if provider is None:
         return base
-    if not settings.send_logs_to_llm:
-        for f in report.findings:
-            f.evidence = [e for e in f.evidence if not e.startswith("log ")]
     try:
-        data = provider.complete_json(SYSTEM_PROMPT, "Diagnose this cluster state.\n\n" + _context_json(report),
+        data = provider.complete_json(SYSTEM_PROMPT, "Diagnose this cluster state.\n\n"
+                                      + _context_json(report, logs=settings.send_logs_to_llm),
                                       DIAGNOSIS_SCHEMA)
         return _validated(data, report, f"{provider.name}:{settings.resolved_model()}")
     except (LLMError, KeyError, TypeError, ValueError) as exc:
@@ -289,8 +288,11 @@ def ask(settings: Settings, snap: Snapshot, question: str, use_llm: bool = True,
         except LLMError as exc:
             report.warnings.append(f"LLM disabled: {exc}")
     if provider:
-        ctx = _context_json(report, {"question": question, "relevant_findings": [_finding_payload(f) for f in relevant[:20]],
-                                     "resources_mentioned": summaries})
+        logs = settings.send_logs_to_llm
+        sent = [{k: v for k, v in s.items() if logs or k != "logs"} for s in summaries]
+        ctx = _context_json(report, {"question": question,
+                                     "relevant_findings": [_finding_payload(f, logs) for f in relevant[:20]],
+                                     "resources_mentioned": sent}, logs=logs)
         try:
             data = provider.complete_json(
                 SYSTEM_PROMPT + "\nAnswer the engineer's question directly first, then the supporting detail.",
