@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rollout-test
+  labels:
+    scenario: bad-rollout
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: rollout-test
+  template:
+    metadata:
+      labels:
+        app: rollout-test
+    spec:
+      containers:
+        - name: app
+          image: python:3.12-slim
+          command: ["python", "-m", "http.server", "8080"]
+          env:
+            - name: API_URL
+              value: http://localhost:8080
+          ports: [{containerPort: 8080}]
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {memory: 128Mi}

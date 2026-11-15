@@ -66,6 +66,9 @@ put it behind oauth2-proxy (see [production.md](production.md#access-and-authent
 | `cost_report` | Right-sizing suggestions and waste (idle GPUs, unused volumes, idle load balancers) |
 | `upgrade_check` | Blockers for a target Kubernetes version |
 | `lint_manifests` | Problems in YAML you paste or generate, before it ships |
+| `preflight_manifests` | The same YAML checked against the live cluster (missing Secrets, capacity, OOM risk, risky diffs) |
+| `cluster_diff` | Time travel: what differs between now and a moment in the past |
+| `draft_postmortem` | A blameless postmortem draft in Markdown |
 | `list_checks` | Every check and what it detects |
 | `add_team_note` | Records what fixed a problem, shown next to future matching findings |
 | `apply_fix` | Only when `KUBESIFT_ALLOW_WRITES=true`: restart, rollback, scale, delete pod. Dry run by default |

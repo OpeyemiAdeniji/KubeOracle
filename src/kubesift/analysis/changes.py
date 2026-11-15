@@ -133,9 +133,10 @@ def detect_changes(snap: Snapshot, window: timedelta = timedelta(hours=6)) -> li
         t = parse_time(op.get("finishedAt") or op.get("startedAt"))
         if not t or t < cutoff:
             continue
-        rev = ((op.get("syncResult") or {}).get("revision") or "")[:10]
+        git_rev = ((op.get("syncResult") or {}).get("revision") or "")[:10]
         changes.append(Change(time=t, kind="argocd", resource=_ref(app),
-                              summary=f"Argo CD synced {meta(app).get('name')} to {rev or 'a new revision'} ({op.get('phase')})",
+                              summary=f"Argo CD synced {meta(app).get('name')} to {git_rev or 'a new revision'} "
+                                      f"({op.get('phase')})",
                               details=[op.get("message", "")[:200]] if op.get("message") else []))
 
     # Nodes joining

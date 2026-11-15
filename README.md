@@ -4,7 +4,7 @@
 
 [Website](https://opeyemiadeniji.github.io/KubeSift/) · [Docs](docs/) · [Production guide](docs/production.md)
 
-KubeSift reads your cluster, runs 60 deterministic checks, links each failure to the change that most likely
+KubeSift reads your cluster, runs 71 deterministic checks, links each failure to the change that most likely
 caused it (a rollout, a ConfigMap edit, a Helm upgrade, a node going away) and tells you the fix, with the
 exact commands. An LLM is optional: it ranks and explains the evidence, it never invents it.
 
@@ -70,6 +70,11 @@ helm install kubesift oci://ghcr.io/opeyemiadeniji/charts/kubesift -n kubesift -
 | `kubesift upgrade-check --target 1.36` | Blockers for the next Kubernetes version |
 | `kubesift cost` | Right-sizing and waste, with monthly savings |
 | `kubesift lint ./k8s -t 1.36` | Check manifests, Helm charts or Kustomize dirs before they ship (no cluster needed) |
+| `kubesift preflight k8s/ -n prod` | **Before deploy:** check a change against the live cluster (missing Secrets, capacity, OOM risk, risky diffs, webhook rejections) |
+| `kubesift diff --since 2h` | **Time travel:** what is different between now and two hours ago |
+| `kubesift postmortem -n shop` | **After:** draft a blameless postmortem with timeline, root cause and action items |
+| `kubesift drill start crashloop` | **Practise:** break a drill namespace on purpose to train on-call |
+| `kubesift knowledge export` / `import` | Share what fixed past incidents between teams and clusters |
 | `kubesift fix rollback deployment/checkout -n shop` | Guarded fix: plan → server-side dry run → confirm → audit log |
 | `kubesift snapshot save` | Redacted snapshot to analyse later with `--from` or attach to a ticket |
 | `kubesift note add pod-oomkilled "Raised to 1Gi; leak fixed in 3.3"` | Team memory, shown next to matching findings |
@@ -85,7 +90,10 @@ and `lint` takes `-o sarif` (GitHub code scanning). `--fail-on high` makes CI fa
 - **On call:** `kubectl sift diagnose -n <ns> -v` or ask your AI assistant through MCP ([docs/mcp.md](docs/mcp.md)).
 - **Alerts:** point Alertmanager at `/api/v1/webhooks/alertmanager`; KubeSift investigates the alert's namespace
   and posts the diagnosis to Slack/Teams before anyone opens a laptop.
-- **CI:** stop problems before they ship.
+- **Slack:** `/sift diagnose shop`, `/sift why checkout`, `/sift changes`, with a "Roll back (dry run)" button
+  ([docs/slack.md](docs/slack.md)).
+- **CI:** stop problems before they ship. `kubesift preflight` checks the change against the real cluster
+  ([docs/preflight.md](docs/preflight.md)); `kubesift lint` needs no cluster.
 
   ```yaml
   - uses: OpeyemiAdeniji/KubeSift@v2
@@ -116,7 +124,7 @@ and `lint` takes `-o sarif` (GitHub code scanning). `--fail-on high` makes CI fa
 ## Docs
 
 - [All checks](docs/checks.md) · [Configuration](docs/configuration.md) · [MCP setup](docs/mcp.md) ·
-  [Production deployment](docs/production.md) · [Architecture](docs/architecture.md) ·
+  [Preflight](docs/preflight.md) · [Slack](docs/slack.md) · [Production deployment](docs/production.md) · [Architecture](docs/architecture.md) ·
   [Releasing](docs/releasing.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
 ## License

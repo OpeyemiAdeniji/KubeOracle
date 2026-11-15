@@ -36,6 +36,16 @@ jobs:
       - run: ruff check src tests
       - run: pytest --cov=kubesift --cov-report=term-missing
 
+  workflows:
+    # A broken workflow file is only noticed when it runs; for the release workflow that is too late.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: actionlint
+        run: |
+          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7
+          ./actionlint -color
+
   oldest-deps:
     # The Kubernetes client changed its low-level API in v37; keep supporting older releases.
     runs-on: ubuntu-latest
@@ -136,7 +146,7 @@ jobs:
           kubectl -n kubesift get pods -o wide
           # The lease must end up held by one of the running replicas (a previous holder may need to expire).
           pods=$(kubectl -n kubesift get pods -l app.kubernetes.io/name=kubesift -o jsonpath='{.items[*].metadata.name}')
-          for i in $(seq 1 30); do
+          for _ in $(seq 1 30); do
             holder=$(kubectl -n kubesift get lease kubesift-scanner -o jsonpath='{.spec.holderIdentity}' 2>/dev/null || true)
             if [ -n "$holder" ] && echo " $pods " | grep -q " $holder "; then break; fi
             sleep 3

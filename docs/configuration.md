@@ -87,3 +87,5 @@ Without Prometheus, metrics-server's current usage is used (one sample; treat as
 | `scan_namespace` | all | |
 | `notify_min_severity` | `high` | |
 | `slack_webhook_url`, `teams_webhook_url`, `webhook_url` | none | Notifications for new problems and Alertmanager investigations |
+| `slack_signing_secret` | none | Enables the `/sift` Slack command and fix buttons (see [slack.md](slack.md)) |
+| `slack_allowed_users` | none | Slack user IDs allowed to apply fixes (comma-separated); empty means nobody; also needs `allow_writes` |

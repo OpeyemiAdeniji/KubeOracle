@@ -25,6 +25,9 @@ EXIT_CODES = {
 }
 
 LOG_HINTS: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r'is forbidden: User "system:serviceaccount:[^"]+"', re.I),
+     "The app calls the Kubernetes API and its ServiceAccount is not allowed to: add a Role/RoleBinding for the "
+     "verb and resource named in the log line."),
     (re.compile(r"exec format error", re.I),
      "The image was built for a different CPU architecture (e.g. arm64 image on amd64 nodes). "
      "Rebuild with `docker buildx build --platform linux/amd64,linux/arm64`."),
@@ -136,8 +139,8 @@ def crashloop(ctx: Context) -> Iterator[Finding]:
             if code == 137 and _liveness_killed(ctx, pod):
                 hints.insert(0, "The liveness probe is failing and the kubelet kills the container; "
                                 "the app may be slow to start (add a startupProbe) or the probe checks the wrong port/path.")
-            msg = f"Container '{name}' keeps crashing ({cs.get('restartCount', 0)} restarts)"
-            msg += f" (exit code {code})." if code is not None else "."
+            msg = f"Container '{name}' keeps crashing ({cs.get('restartCount', 0)} restarts"
+            msg += f", last exit code {code})." if code is not None else ")."
             if hints:
                 msg += " " + hints[0]
             yield ctx.finding(
@@ -349,6 +352,10 @@ def not_ready(ctx: Context) -> Iterator[Finding]:
         probe_events = [e.get("message", "") for e in ctx.snap.events_for("Pod", ns, pname)
                         if "Readiness probe failed" in (e.get("message") or "")]
         evidence = [f"not ready for {human_duration(since)}"] + [m[:300] for m in probe_events[:2]]
+        mesh = [c.get("name") for c in bad if c.get("name") in ("istio-proxy", "linkerd-proxy", "envoy", "cilium-envoy")]
+        if mesh:
+            evidence.insert(0, f"service-mesh sidecar {mesh[0]} is the unready container: check the mesh control "
+                               "plane (istiod / linkerd-destination) and the sidecar logs, not the app")
         for cs in bad:
             evidence += log_hints(ctx, ns, pname, cs.get("name", ""))[1][:3]
         yield ctx.finding(

@@ -6,7 +6,7 @@
 <title>KubeSift — know why Kubernetes broke, not just that it broke</title>
 <meta name="description" content="Open-source Kubernetes troubleshooting. KubeSift finds what's broken, links it to the change that caused it, and gives you the fix — from your terminal, your AI assistant, CI, or a dashboard in your cluster.">
 <meta property="og:title" content="KubeSift — know why Kubernetes broke">
-<meta property="og:description" content="60 evidence-based checks, change correlation and rollback commands. CLI, kubectl plugin, MCP server and Helm chart. Free and open source.">
+<meta property="og:description" content="71 evidence-based checks, change correlation and rollback commands. CLI, kubectl plugin, MCP server and Helm chart. Free and open source.">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary">
 <meta name="theme-color" content="#0b1020">
@@ -29,6 +29,7 @@
     </a>
     <nav class="links" aria-label="Main">
       <a href="#how">How it works</a>
+      <a href="#lifecycle">Features</a>
       <a href="#ways">Ways to use</a>
       <a href="#catches">What it catches</a>
       <a href="#trust">Trust</a>
@@ -49,7 +50,7 @@
     </div>
   </div>
   <div class="mobile-menu" id="mobile-menu" hidden>
-    <a href="#how">How it works</a><a href="#ways">Ways to use</a><a href="#catches">What it catches</a>
+    <a href="#how">How it works</a><a href="#lifecycle">Features</a><a href="#ways">Ways to use</a><a href="#catches">What it catches</a>
     <a href="#trust">Trust</a><a href="https://github.com/OpeyemiAdeniji/KubeSift/tree/main/docs">Docs</a>
     <a href="https://github.com/OpeyemiAdeniji/KubeSift">GitHub</a>
   </div>
@@ -113,8 +114,8 @@ $ kubectl rollout undo deployment/checkout -n shop --to-revision=1</pre>
 <!-- STATS -->
 <section class="wrap stats" aria-label="Key numbers">
   <div class="stat"><b data-count="79">0</b><span>% of production incidents follow a change<a class="cite" href="https://komodor.com/blog/komodor-2025-enterprise-kubernetes-report-finds-nearly-80-of-production-outages/" title="Komodor 2025 Enterprise Kubernetes Report">¹</a></span></div>
-  <div class="stat"><b data-count="60">0</b><span>evidence-based checks, from crash loops to retired ingress controllers</span></div>
-  <div class="stat"><b>~2s</b><span>to analyse a 5,000-pod cluster</span></div>
+  <div class="stat"><b data-count="71">0</b><span>evidence-based checks, from crash loops to retired ingress controllers</span></div>
+  <div class="stat"><b>~3s</b><span>to analyse a 5,000-pod cluster</span></div>
   <div class="stat"><b>0</b><span>Secret values kept — only key names and certificate dates</span></div>
 </section>
 
@@ -135,7 +136,7 @@ $ kubectl rollout undo deployment/checkout -n shop --to-revision=1</pre>
       <article class="step reveal">
         <span class="step-n">02</span>
         <h3>Prove what's wrong</h3>
-        <p>60 deterministic checks turn raw state into findings with evidence copied from the cluster — exit codes,
+        <p>71 deterministic checks turn raw state into findings with evidence copied from the cluster — exit codes,
           scheduler reasons, missing keys, the log line that names the missing env var.</p>
       </article>
       <article class="step reveal">
@@ -162,6 +163,25 @@ $ kubectl rollout undo deployment/checkout -n shop --to-revision=1</pre>
         <li class="fix"><time>now</time><span class="tl-dot ok"></span><div><b>Likely cause: the 14:02 rollout · 85% confidence</b>
           <p><code>kubectl rollout undo deployment/checkout -n shop --to-revision=1</code></p></div></li>
       </ol>
+    </div>
+  </div>
+</section>
+
+<!-- LIFECYCLE -->
+<section class="section" id="lifecycle">
+  <div class="wrap">
+    <p class="eyebrow">Before, during and after</p>
+    <h2>Covers the whole incident, not just the fire.</h2>
+    <p class="sub">Most incidents follow a change. So KubeSift checks changes before they ship, explains failures when they happen, and writes up what happened afterwards.</p>
+    <div class="catch-grid">
+      <article class="catch reveal"><h3>Preflight</h3><p>Before deploy, check the change against the <b>live</b> cluster: missing Secrets, pods that won't fit, a memory limit below what the app uses today, env vars the running version needs, webhook rejections.</p></article>
+      <article class="catch reveal"><h3>Diagnose</h3><p>When something breaks: the cause, the change that triggered it, and the rollback — in your terminal, AI assistant, dashboard or Slack.</p></article>
+      <article class="catch reveal"><h3>Time travel</h3><p>Compare the cluster now with an hour ago. See every image, config key, replica count and node that changed, even ones Kubernetes doesn't record.</p></article>
+      <article class="catch reveal"><h3>Postmortem</h3><p>One command drafts a blameless postmortem: impact, timeline, root cause, triggering change and action items, built from cluster evidence.</p></article>
+      <article class="catch reveal"><h3>On-call in Slack</h3><p><code>/sift why checkout</code> in a channel. Answers with evidence and a "Roll back (dry run)" button. Applying needs your approval and permission.</p></article>
+      <article class="catch reveal"><h3>Fire drills</h3><p><code>kubesift drill start crashloop</code> safely breaks a training namespace so new engineers practise on realistic failures.</p></article>
+      <article class="catch reveal"><h3>Team knowledge</h3><p>Record what fixed an incident once; it appears next to the same problem later. Export a pack and share it with other teams.</p></article>
+      <article class="catch reveal"><h3>Upgrades &amp; cost</h3><p>Blockers for the next Kubernetes version, and right-sizing from real usage — the incidents and bills you avoid.</p></article>
     </div>
   </div>
 </section>
@@ -253,7 +273,7 @@ https://kubesift.your-co.com/mcp</code></pre>
 <section class="section alt" id="catches">
   <div class="wrap">
     <p class="eyebrow">What it catches</p>
-    <h2>60 checks built from real incidents.</h2>
+    <h2>71 checks built from real incidents.</h2>
     <p class="sub">Each one says what is wrong in plain words, shows the evidence, and gives the fix.</p>
     <div class="catch-grid">
       <article class="catch reveal"><h3>Workloads</h3><p>Crash loops explained by exit code and logs, OOM kills with a suggested limit, rollouts past their deadline, failing Jobs and CronJobs.</p></article>
@@ -265,7 +285,7 @@ https://kubesift.your-co.com/mcp</code></pre>
       <article class="catch reveal"><h3>Cost</h3><p>Over-requested CPU and memory with right-sizing from real usage, idle GPUs, unused volumes, load balancers with no backends.</p></article>
       <article class="catch reveal"><h3>Security &amp; reliability</h3><p>Privileged containers, secrets in plain env vars, cluster-admin service accounts, single replicas, missing probes and limits.</p></article>
     </div>
-    <p class="center more"><a class="link" href="https://github.com/OpeyemiAdeniji/KubeSift/blob/main/docs/checks.md">See all 60 checks →</a></p>
+    <p class="center more"><a class="link" href="https://github.com/OpeyemiAdeniji/KubeSift/blob/main/docs/checks.md">See all 71 checks →</a></p>
   </div>
 </section>
 

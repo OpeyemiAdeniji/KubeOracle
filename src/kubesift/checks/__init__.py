@@ -7,6 +7,7 @@ from kubesift.checks import (  # noqa: F401
     lifecycle,
     network,
     nodes,
+    operations,
     pods,
     storage,
     workloads,

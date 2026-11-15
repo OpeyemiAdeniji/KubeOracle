@@ -13,7 +13,7 @@ ruff check src tests
 ## Adding a check
 
 1. Pick the module in `src/kubesift/checks/` that matches the area (pods, workloads, network, nodes,
-   storage, events, hygiene, lifecycle, config_refs).
+   storage, events, hygiene, lifecycle, config_refs, operations).
 2. Write a function decorated with `@check(...)`:
 
    ```python

@@ -42,6 +42,11 @@ notifications:
   teamsWebhookUrl: ""
   webhookUrl: ""
 
+# Slack on-call: `/sift` slash command and fix buttons (see docs/slack.md).
+slack:
+  signingSecret: ""      # from your Slack app's Basic Information page
+  allowedUsers: []       # Slack user IDs allowed to apply fixes (also needs rbac.allowWrites)
+
 rbac:
   create: true
   # Reading Secrets lets KubeSift check missing secret references, TLS expiry and Helm releases.

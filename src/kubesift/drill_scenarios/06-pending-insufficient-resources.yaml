@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pending-test
+  labels:
+    scenario: pending-resources
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pending-test
+  template:
+    metadata:
+      labels:
+        app: pending-test
+    spec:
+      containers:
+        - name: app
+          image: nginx:stable
+          resources:
+            requests:
+              memory: "999Gi"
+              cpu: "999"
+            limits:
+              memory: "999Gi"
+              cpu: "999"

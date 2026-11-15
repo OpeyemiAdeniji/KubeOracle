@@ -47,7 +47,7 @@ jobs:
       - id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository_owner }}/kubesift
+          images: ghcr.io/${{ github.repository_owner }}/kubesift   # metadata-action lowercases this
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
@@ -79,13 +79,15 @@ jobs:
       - uses: sigstore/cosign-installer@v3
       - name: Package, push and sign the chart (OCI)
         run: |
+          owner=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')  # OCI names must be lowercase
           echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u "${{ github.actor }}" --password-stdin
           echo "${{ secrets.GITHUB_TOKEN }}" | cosign login ghcr.io -u "${{ github.actor }}" --password-stdin
           helm package deploy/helm/kubesift
-          out=$(helm push kubesift-*.tgz oci://ghcr.io/${{ github.repository_owner }}/charts 2>&1)
+          out=$(helm push kubesift-*.tgz "oci://ghcr.io/${owner}/charts" 2>&1)
           echo "$out"
           digest=$(echo "$out" | awk '/Digest:/ {print $2}')
-          cosign sign --yes "ghcr.io/${{ github.repository_owner }}/charts/kubesift@${digest}"
+          test -n "$digest"
+          cosign sign --yes "ghcr.io/${owner}/charts/kubesift@${digest}"
 
   github-release:
     runs-on: ubuntu-latest
@@ -94,6 +96,13 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - run: gh release create "$GITHUB_REF_NAME" --generate-notes --verify-tag
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: "Move the major tag (v2) so the GitHub Action reference @v2 gets this release"
+        run: |
+          major="${GITHUB_REF_NAME%%.*}"
+          git tag -f "$major" "$GITHUB_REF_NAME"
+          git push -f origin "refs/tags/$major"
