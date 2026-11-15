@@ -63,6 +63,9 @@ class Settings(BaseModel):
     cors_origins: list[str] = Field(default_factory=list)
     allow_writes: bool = False
     scan_interval: int = 0  # seconds; 0 disables background scans
+    cache_ttl: int = 20  # seconds a cluster snapshot is reused by the server
+    alert_cooldown: int = 600  # seconds before the same namespace is investigated again for alerts
+    history_days: int = 30  # stored investigations older than this are deleted
     scan_namespace: str | None = None
     notify_min_severity: str = "high"
 

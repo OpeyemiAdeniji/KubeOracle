@@ -25,6 +25,17 @@ jobs:
       - run: ruff check src tests
       - run: pytest --cov=kubeoracle --cov-report=term-missing
 
+  oldest-deps:
+    # The Kubernetes client changed its low-level API in v37; keep supporting older releases.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - run: pip install -e ".[dev]" "kubernetes==31.0.0"
+      - run: pytest -q
+
   chart:
     runs-on: ubuntu-latest
     steps:

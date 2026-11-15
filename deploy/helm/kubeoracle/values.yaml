@@ -3,6 +3,7 @@ image:
   tag: ""          # defaults to the chart appVersion
   pullPolicy: IfNotPresent
 
+# Keep at 1: history is stored in SQLite on a ReadWriteOnce volume.
 replicaCount: 1
 
 # API token for the dashboard/API. Leave empty to generate one (read it with the command in NOTES).

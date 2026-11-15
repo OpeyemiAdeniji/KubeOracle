@@ -62,8 +62,14 @@ class AnthropicProvider(Provider):
             # Server-side fallback re-runs a declined request on another model inside the same call.
             response = self.client.beta.messages.create(
                 **request, betas=["server-side-fallback-2026-07-01"], fallbacks="default")
-        except a.BadRequestError:
-            response = self.client.messages.create(**request)
+        except (a.BadRequestError, TypeError):
+            # Older SDKs (TypeError) or endpoints (400) without server-side fallback: send a plain request.
+            try:
+                response = self.client.messages.create(**request)
+            except a.APIStatusError as exc:
+                raise LLMError(f"Anthropic API error {exc.status_code}: {exc.message}") from exc
+            except a.APIConnectionError as exc:
+                raise LLMError(f"Cannot reach the Anthropic API: {exc}") from exc
         except a.AuthenticationError as exc:
             raise LLMError("Anthropic rejected the API key (set ANTHROPIC_API_KEY).") from exc
         except a.RateLimitError as exc:

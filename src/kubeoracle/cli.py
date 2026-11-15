@@ -125,7 +125,7 @@ def diagnose(
     with err.status("Analysing…"):
         report = investigate(state.settings, snap, use_llm=llm, window=parse_duration(since), store=store)
     if store:
-        store.save_report(report)
+        store.save_report(report, retention_days=state.settings.history_days)
     _emit(report, output, risks, verbose)
     _exit_on(report.findings, fail_on)
 
@@ -555,6 +555,8 @@ def serve(
     s = state.settings
     if host not in ("127.0.0.1", "localhost") and not s.api_token:
         _fail("refusing to listen on a non-local address without KUBEORACLE_API_TOKEN")
+    import logging
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     uvicorn.run(create_app(s), host=host, port=port, log_level="info")
 
 

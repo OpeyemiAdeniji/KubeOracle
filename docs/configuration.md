@@ -78,6 +78,9 @@ Without Prometheus, metrics-server's current usage is used (one sample; treat as
 | `cors_origins` | none | Comma-separated |
 | `allow_writes` | `false` | Enables `/api/v1/fix` and the MCP `apply_fix` tool |
 | `scan_interval` | `0` | Seconds between background scans (0 = off) |
+| `cache_ttl` | `20` | Seconds a cluster snapshot is reused across API calls |
+| `alert_cooldown` | `600` | Seconds before the same namespace is investigated again for Alertmanager alerts |
+| `history_days` | `30` | Stored investigations older than this are deleted |
 | `scan_namespace` | all | |
 | `notify_min_severity` | `high` | |
 | `slack_webhook_url`, `teams_webhook_url`, `webhook_url` | none | Notifications for new problems and Alertmanager investigations |

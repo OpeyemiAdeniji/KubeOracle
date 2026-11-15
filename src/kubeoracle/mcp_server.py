@@ -57,7 +57,7 @@ def build_server(settings: Settings) -> MCPServer:
         """Scan the cluster (or one namespace) and return problems grouped into incidents, with evidence,
         likely triggering changes and suggested fixes. Set include_risks to also list configuration risks."""
         report = investigate(settings, snapshot_for(settings, namespace, context), use_llm=False, store=store)
-        store.save_report(report, source="mcp")
+        store.save_report(report, source="mcp", retention_days=settings.history_days)
         return json.dumps(_compact_report(report, include_risks), default=str)
 
     @server.tool(name="explain_resource", annotations=READ_ONLY)

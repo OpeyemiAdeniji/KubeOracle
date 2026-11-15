@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import copy
 import hmac
 import logging
 import threading
 import time
+from collections import defaultdict
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
@@ -13,7 +15,7 @@ from typing import Any
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, PlainTextResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from kubeoracle import __version__, notify
 from kubeoracle.analysis.changes import detect_changes
@@ -36,14 +38,14 @@ class DiagnoseRequest(BaseModel):
 
 
 class AskRequest(BaseModel):
-    question: str
+    question: str = Field(min_length=3, max_length=2000)
     namespace: str | None = None
     context: str | None = None
     llm: bool = True
 
 
 class LintRequest(BaseModel):
-    manifests: str
+    manifests: str = Field(max_length=2_000_000)
     target_version: str | None = None
 
 
@@ -61,6 +63,7 @@ def create_app(settings: Settings) -> FastAPI:
                   description="Evidence-based Kubernetes troubleshooting API.")
     store = Store(settings.data_dir)
     state: dict[str, Any] = {"last_scan": None, "last_report": None}
+    alert_seen: dict[str | None, float] = {}
     if settings.cors_origins:
         app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_methods=["GET", "POST"],
                            allow_headers=["Authorization", "Content-Type"])
@@ -72,11 +75,24 @@ def create_app(settings: Settings) -> FastAPI:
         if not hmac.compare_digest(token, settings.api_token):
             raise HTTPException(status_code=401, detail="invalid or missing bearer token")
 
+    # Short-lived snapshot cache: many dashboard/API calls in a row read the cluster once,
+    # and concurrent requests for the same scope wait for one collection instead of each starting one.
+    cache: dict[tuple, tuple[float, Any]] = {}
+    locks: dict[tuple, threading.Lock] = defaultdict(threading.Lock)
+
     def snap(namespace: str | None, context: str | None, with_logs: bool = True):
+        key = (namespace, context, with_logs)
         try:
-            return snapshot_for(settings, namespace, context, with_logs=with_logs)
+            with locks[key]:
+                hit = cache.get(key)
+                if hit is None or time.monotonic() - hit[0] > settings.cache_ttl:
+                    hit = (time.monotonic(), snapshot_for(settings, namespace, context, with_logs=with_logs))
+                    cache[key] = hit
         except Exception as exc:
             raise HTTPException(status_code=502, detail=f"cannot reach the cluster: {exc}") from exc
+        out = copy.copy(hit[1])
+        out.warnings = list(hit[1].warnings)
+        return out
 
     @app.get("/healthz", include_in_schema=False)
     def healthz() -> dict[str, str]:
@@ -108,14 +124,14 @@ def create_app(settings: Settings) -> FastAPI:
     def diagnose(req: DiagnoseRequest) -> dict[str, Any]:
         report = investigate(settings, snap(req.namespace, req.context), use_llm=req.llm,
                              window=parse_duration(req.since), store=store)
-        rid = store.save_report(report, source="api")
+        rid = store.save_report(report, source="api", retention_days=settings.history_days)
         state["last_report"] = report
         return {"id": rid, **report.model_dump(mode="json")}
 
     @app.post("/api/v1/ask", dependencies=[Depends(auth)])
     def ask_question(req: AskRequest) -> dict[str, Any]:
         report, answer = ask(settings, snap(req.namespace, req.context), req.question, use_llm=req.llm, store=store)
-        rid = store.save_report(report, source="api-ask")
+        rid = store.save_report(report, source="api-ask", retention_days=settings.history_days)
         return {"id": rid, "answer": answer, "report": report.model_dump(mode="json")}
 
     @app.get("/api/v1/changes", dependencies=[Depends(auth)])
@@ -184,8 +200,16 @@ def create_app(settings: Settings) -> FastAPI:
         firing = [a for a in payload.get("alerts") or [] if a.get("status") == "firing"]
         namespaces = sorted({(a.get("labels") or {}).get("namespace") for a in firing} - {None})
         names = ", ".join(sorted({(a.get("labels") or {}).get("alertname", "?") for a in firing}))
-        background.add_task(_alert_investigation, settings, store, namespaces or [None], names)
-        return {"accepted": len(firing), "namespaces": namespaces}
+        now_t = time.monotonic()
+        due = []
+        for ns in namespaces or [None]:
+            # Alert storms fire the same alert many times; investigate each namespace at most once per cooldown.
+            if now_t - alert_seen.get(ns, -1e9) >= settings.alert_cooldown:
+                alert_seen[ns] = now_t
+                due.append(ns)
+        if due:
+            background.add_task(_alert_investigation, settings, store, due, names)
+        return {"accepted": len(firing), "namespaces": namespaces, "investigating": due}
 
     @app.get("/metrics", include_in_schema=False)
     def metrics() -> PlainTextResponse:
@@ -207,11 +231,19 @@ def create_app(settings: Settings) -> FastAPI:
     return app
 
 
+_ALERT_SLOTS = threading.BoundedSemaphore(2)  # at most two alert investigations at a time
+
+
 def _alert_investigation(settings: Settings, store: Store, namespaces: list[str | None], alerts: str) -> None:
+    with _ALERT_SLOTS:
+        _alert_investigation_locked(settings, store, namespaces, alerts)
+
+
+def _alert_investigation_locked(settings: Settings, store: Store, namespaces: list[str | None], alerts: str) -> None:
     for ns in namespaces:
         try:
             report = investigate(settings, snapshot_for(settings, ns), use_llm=True, store=store, include_risks=False)
-            store.save_report(report, source="alertmanager")
+            store.save_report(report, source="alertmanager", retention_days=settings.history_days)
             problems = [f for f in report.findings if f.kind == "problem"]
             title = f"Alert {alerts} in {ns or 'cluster'}: " + (report.diagnosis.summary[:120] if report.diagnosis else "")
             notify.send(settings, report, problems or report.findings[:3], title=title)
@@ -232,7 +264,7 @@ def _scan_loop(settings: Settings, store: Store, state: dict[str, Any]) -> None:
             if fresh:
                 from kubeoracle.analysis.engine import explain
                 report.diagnosis = explain(settings, report, use_llm=True)
-                store.save_report(report, source="scan")
+                store.save_report(report, source="scan", retention_days=settings.history_days)
                 notify.send(settings, report, fresh)
         except Exception as exc:
             log.warning("background scan failed: %s", exc)

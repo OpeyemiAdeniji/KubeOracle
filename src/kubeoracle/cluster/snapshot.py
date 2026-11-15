@@ -110,17 +110,26 @@ class Snapshot:
         return self._idx  # type: ignore[attr-defined]
 
     def in_namespace(self, key: str, namespace: str | None) -> list[dict[str, Any]]:
-        return [o for o in self.all(key) if meta(o).get("namespace") == namespace]
+        cache = self.__dict__.setdefault("_ns_idx", {})
+        if key not in cache:
+            by_ns: dict[str | None, list[dict[str, Any]]] = defaultdict(list)
+            for o in self.all(key):
+                by_ns[meta(o).get("namespace")].append(o)
+            cache[key] = by_ns
+        return cache[key].get(namespace, [])
 
     def events_for(self, kind: str, namespace: str | None, name: str) -> list[dict[str, Any]]:
-        out = []
-        for e in self.all("events"):
-            inv = e.get("involvedObject") or e.get("regarding") or {}
-            if inv.get("kind") == kind and inv.get("name") == name and (
-                namespace is None or inv.get("namespace") in (namespace, None, "")
-            ):
-                out.append(e)
-        return sorted(out, key=event_time, reverse=True)
+        if "_ev_idx" not in self.__dict__:
+            idx: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+            for e in self.all("events"):
+                inv = e.get("involvedObject") or e.get("regarding") or {}
+                idx[(inv.get("kind", ""), inv.get("name", ""))].append(e)
+            for items in idx.values():
+                items.sort(key=event_time, reverse=True)
+            self.__dict__["_ev_idx"] = idx
+        return [e for e in self.__dict__["_ev_idx"].get((kind, name), [])
+                if namespace is None or ((e.get("involvedObject") or e.get("regarding") or {}).get("namespace")
+                                         in (namespace, None, ""))]
 
     def owner_of(self, obj: dict[str, Any]) -> ResourceRef:
         """Follow ownerReferences up to the top-level workload (Pod -> ReplicaSet -> Deployment)."""

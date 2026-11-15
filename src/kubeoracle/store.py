@@ -6,7 +6,7 @@ import json
 import sqlite3
 import threading
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -38,7 +38,10 @@ class Store:
         self._lock = threading.Lock()
         self._db = sqlite3.connect(self.path, check_same_thread=False)
         self._db.row_factory = sqlite3.Row
+        self._db.execute("PRAGMA journal_mode=WAL")  # readers don't block the background scanner
+        self._db.execute("PRAGMA busy_timeout=5000")
         self._db.executescript(_SCHEMA)
+        self._saves = 0
 
     def _exec(self, sql: str, params: tuple = ()) -> sqlite3.Cursor:
         with self._lock:
@@ -47,7 +50,15 @@ class Store:
             return cur
 
     # reports
-    def save_report(self, report: Report, source: str = "cli") -> str:
+    def prune(self, days: int) -> int:
+        """Delete stored investigations older than `days`. Notes and the audit log are kept."""
+        cutoff = (now() - timedelta(days=days)).isoformat()
+        return self._exec("DELETE FROM reports WHERE created < ?", (cutoff,)).rowcount
+
+    def save_report(self, report: Report, source: str = "cli", retention_days: int = 30) -> str:
+        self._saves += 1
+        if self._saves % 50 == 1:
+            self.prune(retention_days)
         rid = uuid.uuid4().hex[:10]
         summary = report.diagnosis.summary if report.diagnosis else ""
         self._exec("INSERT INTO reports VALUES (?,?,?,?,?,?,?,?,?)",

@@ -52,18 +52,24 @@ class KubeClient:
         headers = {"Accept": "*/*" if raw else "application/json"}
         if content_type:
             headers["Content-Type"] = content_type
-        params = self.api.param_serialize(
-            method=method,
-            resource_path=path,
-            query_params=[(k, v) for k, v in (query or {}).items() if v is not None],
-            header_params=headers,
-            body=body,
-            auth_settings=["BearerToken"],
-        )
+        query_params = [(k, v) for k, v in (query or {}).items() if v is not None]
         try:
-            resp = self.api.call_api(*params, _request_timeout=self.timeout)
-            data = resp.read()
-            status = resp.status
+            if hasattr(self.api, "param_serialize"):  # kubernetes >= 37 (new generator)
+                params = self.api.param_serialize(
+                    method=method, resource_path=path, query_params=query_params,
+                    header_params=headers, body=body, auth_settings=["BearerToken"],
+                )
+                resp = self.api.call_api(*params, _request_timeout=self.timeout)
+                data = resp.read()
+                status = resp.status
+            else:  # kubernetes <= 36
+                resp = self.api.call_api(
+                    path, method, query_params=query_params, header_params=headers, body=body,
+                    auth_settings=["BearerToken"], _preload_content=False, _return_http_data_only=True,
+                    _request_timeout=self.timeout,
+                )
+                data = resp.data
+                status = resp.status
         except ApiException as exc:
             raise KubeError(exc.status or 0, _message(exc.body) or str(exc.reason)) from exc
         if status >= 400:
