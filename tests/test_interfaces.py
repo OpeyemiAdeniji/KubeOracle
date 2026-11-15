@@ -5,18 +5,18 @@ import json
 import pytest
 from typer.testing import CliRunner
 
-from kubeoracle.cli import app
-from kubeoracle.cost import cost_report
-from kubeoracle.upgrade import upgrade_report
+from kubesift.cli import app
+from kubesift.cost import cost_report
+from kubesift.upgrade import upgrade_report
 
 runner = CliRunner()
 
 
 @pytest.fixture(autouse=True)
 def isolated(monkeypatch, tmp_path):
-    monkeypatch.setenv("KUBEORACLE_DATA_DIR", str(tmp_path / "data"))
-    monkeypatch.setenv("KUBEORACLE_LLM_PROVIDER", "none")
-    monkeypatch.setenv("KUBEORACLE_CONFIG", str(tmp_path / "none.yaml"))
+    monkeypatch.setenv("KUBESIFT_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("KUBESIFT_LLM_PROVIDER", "none")
+    monkeypatch.setenv("KUBESIFT_CONFIG", str(tmp_path / "none.yaml"))
 
 
 def test_cli_diagnose_json(snapshot_file):
@@ -36,7 +36,7 @@ def test_cli_diagnose_text_and_fail_on(snapshot_file):
 def test_cli_markdown(snapshot_file):
     result = runner.invoke(app, ["diagnose", "--from", str(snapshot_file), "--no-llm", "-o", "markdown"])
     assert result.exit_code == 0
-    assert result.output.startswith("# KubeOracle report")
+    assert result.output.startswith("# KubeSift report")
 
 
 def test_cli_ask(snapshot_file):
@@ -97,7 +97,7 @@ def test_cost_report(snap, settings):
 def test_server(snap, settings, monkeypatch):
     from fastapi.testclient import TestClient
 
-    from kubeoracle.server import app as server_app
+    from kubesift.server import app as server_app
 
     settings.api_token = "t0ken"
     monkeypatch.setattr(server_app, "snapshot_for", lambda *a, **k: snap)
@@ -117,14 +117,14 @@ def test_server(snap, settings, monkeypatch):
     r = client.post("/api/v1/webhooks/alertmanager", headers=h, json={"alerts": [
         {"status": "firing", "labels": {"alertname": "KubePodCrashLooping", "namespace": "shop"}}]})
     assert r.json()["namespaces"] == ["shop"]
-    assert "kubeoracle_findings" in client.get("/metrics").text
+    assert "kubesift_findings" in client.get("/metrics").text
     assert client.get("/").status_code == 200
 
 
 def test_mcp_tools(settings):
     import asyncio
 
-    from kubeoracle.mcp_server import build_server
+    from kubesift.mcp_server import build_server
 
     server = build_server(settings)
     tools = asyncio.run(server.list_tools())

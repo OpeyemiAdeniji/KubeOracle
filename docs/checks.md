@@ -1,6 +1,6 @@
 # Checks
 
-KubeOracle runs 60 checks. **Problems** are broken now; **risks** will hurt later. Checks marked *lint* also run on manifest files (`kubeoracle lint`), without a cluster.
+KubeSift runs 60 checks. **Problems** are broken now; **risks** will hurt later. Checks marked *lint* also run on manifest files (`kubesift lint`), without a cluster.
 
 Regenerate this page with `python scripts/gen_check_docs.py`.
 

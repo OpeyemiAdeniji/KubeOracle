@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from fixtures import broken_cluster  # noqa: E402
 
-from kubeoracle.config import Settings  # noqa: E402
+from kubesift.config import Settings  # noqa: E402
 
 
 @pytest.fixture

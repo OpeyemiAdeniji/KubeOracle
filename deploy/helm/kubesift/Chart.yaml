@@ -1,0 +1,8 @@
+apiVersion: v2
+name: kubesift
+description: Evidence-based Kubernetes troubleshooting service (dashboard, API, Alertmanager receiver, background scans)
+type: application
+version: 2.0.0
+appVersion: "2.0.0"
+home: https://github.com/OpeyemiAdeniji/KubeSift
+keywords: [kubernetes, troubleshooting, sre, observability]

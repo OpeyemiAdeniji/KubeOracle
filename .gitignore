@@ -24,7 +24,7 @@ dist/
 .coverage
 *.egg-info/
 
-# KubeOracle outputs
+# KubeSift outputs
 e2e-report.json
-kubeoracle-snapshot.json
-kubeoracle.sarif
+kubesift-snapshot.json
+kubesift.sarif

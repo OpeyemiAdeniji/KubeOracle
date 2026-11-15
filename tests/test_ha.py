@@ -12,10 +12,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import pytest
 import yaml
 
-from kubeoracle.analysis.engine import investigate
-from kubeoracle.store import Store
+from kubesift.analysis.engine import investigate
+from kubesift.store import Store
 
-PG_URL = os.environ.get("KUBEORACLE_TEST_DATABASE_URL")
+PG_URL = os.environ.get("KUBESIFT_TEST_DATABASE_URL")
 BACKENDS = ["sqlite"] + (["postgres"] if PG_URL else [])
 
 
@@ -118,12 +118,12 @@ def lease_api(tmp_path):
 
 
 def test_leader_election_and_failover(lease_api):
-    from kubeoracle.cluster.client import KubeClient
-    from kubeoracle.leader import LeaderElector
+    from kubesift.cluster.client import KubeClient
+    from kubesift.leader import LeaderElector
 
     kc, state = lease_api
-    a = LeaderElector(KubeClient(kubeconfig=kc), "kubeoracle", identity="pod-a", lease_seconds=2)
-    b = LeaderElector(KubeClient(kubeconfig=kc), "kubeoracle", identity="pod-b", lease_seconds=2)
+    a = LeaderElector(KubeClient(kubeconfig=kc), "kubesift", identity="pod-a", lease_seconds=2)
+    b = LeaderElector(KubeClient(kubeconfig=kc), "kubesift", identity="pod-b", lease_seconds=2)
     assert a.try_acquire() is True          # creates the lease
     assert b.try_acquire() is False         # a holds it
     assert a.try_acquire() is True          # renew
@@ -152,7 +152,7 @@ def test_mcp_http_requires_token(settings):
     from mcp import ClientSession
     from mcp.client.streamable_http import streamable_http_client
 
-    from kubeoracle.server.app import create_app
+    from kubesift.server.app import create_app
 
     settings.api_token = "s3cret-token"
     port = _free_port()

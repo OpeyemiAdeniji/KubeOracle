@@ -2,14 +2,14 @@
 
 from pathlib import Path
 
-from kubeoracle.checks import REGISTRY
+from kubesift.checks import REGISTRY
 
 ORDER = ["workload", "config", "network", "platform", "node", "scheduling", "storage", "resources",
          "reliability", "security", "upgrade", "cost"]
 
 lines = ["# Checks", "",
-         f"KubeOracle runs {len(REGISTRY)} checks. **Problems** are broken now; **risks** will hurt later. "
-         "Checks marked *lint* also run on manifest files (`kubeoracle lint`), without a cluster.", "",
+         f"KubeSift runs {len(REGISTRY)} checks. **Problems** are broken now; **risks** will hurt later. "
+         "Checks marked *lint* also run on manifest files (`kubesift lint`), without a cluster.", "",
          "Regenerate this page with `python scripts/gen_check_docs.py`.", ""]
 for cat in ORDER:
     items = sorted((c for c in REGISTRY.values() if c.category.value == cat), key=lambda c: c.id)

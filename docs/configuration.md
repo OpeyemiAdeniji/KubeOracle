@@ -2,11 +2,11 @@
 
 Settings come from (lowest to highest priority): defaults, the config file, environment variables, CLI flags.
 
-- Config file: `~/.config/kubeoracle/config.yaml` (or the path in `KUBEORACLE_CONFIG`). Keys are the names below.
-- Environment: `KUBEORACLE_<NAME>` in upper case, e.g. `KUBEORACLE_LLM_PROVIDER=ollama`.
+- Config file: `~/.config/kubesift/config.yaml` (or the path in `KUBESIFT_CONFIG`). Keys are the names below.
+- Environment: `KUBESIFT_<NAME>` in upper case, e.g. `KUBESIFT_LLM_PROVIDER=ollama`.
 
 ```yaml
-# ~/.config/kubeoracle/config.yaml
+# ~/.config/kubesift/config.yaml
 llm_provider: anthropic        # auto | anthropic | openai | openrouter | ollama | none
 llm_model: claude-opus-5-5
 prometheus_url: http://localhost:9090
@@ -24,12 +24,12 @@ cost_gb_hour: 0.0042
 | `request_timeout` | `20` | Seconds per API call |
 | `max_items_per_kind` | `5000` | Cap per resource type on very large clusters |
 
-Inside a pod, KubeOracle uses the service account automatically. It needs **read** access only; see
-`deploy/helm/kubeoracle/templates/rbac.yaml` for the exact rules. Missing permissions are reported, not fatal.
+Inside a pod, KubeSift uses the service account automatically. It needs **read** access only; see
+`deploy/helm/kubesift/templates/rbac.yaml` for the exact rules. Missing permissions are reported, not fatal.
 
 ## LLM
 
-KubeOracle never needs an LLM: every finding comes from deterministic checks. An LLM only ranks and explains them.
+KubeSift never needs an LLM: every finding comes from deterministic checks. An LLM only ranks and explains them.
 
 | Name | Default | Notes |
 |---|---|---|
@@ -48,7 +48,7 @@ values and ConfigMap values are never collected. Tokens, passwords, keys, connec
 addresses in log lines are redacted before anything is stored or sent. To keep everything local, use Ollama:
 
 ```bash
-export KUBEORACLE_LLM_PROVIDER=ollama KUBEORACLE_LLM_MODEL=llama3.1
+export KUBESIFT_LLM_PROVIDER=ollama KUBESIFT_LLM_MODEL=llama3.1
 ```
 
 ## Usage data and cost
@@ -67,9 +67,9 @@ Without Prometheus, metrics-server's current usage is used (one sample; treat as
 
 | Name | Default | Notes |
 |---|---|---|
-| `data_dir` | `~/.kubeoracle` | SQLite: history, team notes, audit log |
-| `database_url` | none | `postgresql://...` to share state between replicas (`pip install "kubeoracle[postgres]"`) |
-| `runbooks_dir` | none | YAML runbooks attached to matching findings (see `src/kubeoracle/runbooks.py`) |
+| `data_dir` | `~/.kubesift` | SQLite: history, team notes, audit log |
+| `database_url` | none | `postgresql://...` to share state between replicas (`pip install "kubesift[postgres]"`) |
+| `runbooks_dir` | none | YAML runbooks attached to matching findings (see `src/kubesift/runbooks.py`) |
 
 ## Server
 
@@ -78,7 +78,7 @@ Without Prometheus, metrics-server's current usage is used (one sample; treat as
 | `api_token` | none | Protects the API, Alertmanager webhook and `/mcp`; required on a non-local address |
 | `cors_origins` | none | Comma-separated |
 | `allow_writes` | `false` | Enables `/api/v1/fix` and the MCP `apply_fix` tool |
-| `leader_election` | `false` | Only the holder of the `kubeoracle-scanner` Lease runs background scans (the chart turns it on) |
+| `leader_election` | `false` | Only the holder of the `kubesift-scanner` Lease runs background scans (the chart turns it on) |
 | `leader_namespace` | pod namespace | Namespace for the Lease |
 | `scan_interval` | `0` | Seconds between background scans (0 = off) |
 | `cache_ttl` | `20` | Seconds a cluster snapshot is reused across API calls |

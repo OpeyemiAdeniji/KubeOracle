@@ -14,7 +14,7 @@
 **Snapshot** (`cluster/snapshot.py`). One parallel read of ~35 resource types through the Kubernetes API
 (no kubectl needed), plus metrics-server data and the previous logs of failing containers. Secrets are reduced
 to key names, type and certificate expiry at read time; ConfigMaps to key names; log lines are redacted. A
-snapshot can be saved (`kubeoracle snapshot save`) and analysed later with `--from`, which also makes bug
+snapshot can be saved (`kubesift snapshot save`) and analysed later with `--from`, which also makes bug
 reports reproducible.
 
 **Checks** (`checks/`). Plain functions that read a snapshot and return `Finding`s: severity, the resource and
@@ -36,5 +36,5 @@ rollback of a triggering change. With an LLM, the incidents, changes and evidenc
 capped) with a strict JSON schema. The reply is validated: root causes that cite no real finding are capped at
 40% confidence. Any LLM failure falls back to the rule-based diagnosis.
 
-**Safety.** Read-only by default. `kubeoracle fix` and the API/MCP fix endpoints show a plan, run a
+**Safety.** Read-only by default. `kubesift fix` and the API/MCP fix endpoints show a plan, run a
 server-side dry run, require confirmation (or `allow_writes`), and write an audit entry.

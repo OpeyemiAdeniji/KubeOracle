@@ -5,9 +5,9 @@
 Please use GitHub's private vulnerability reporting ("Security" tab → "Report a vulnerability") rather than a
 public issue. You'll get a reply within a few days.
 
-## What KubeOracle reads and sends
+## What KubeSift reads and sends
 
-- **Cluster access:** read-only (`get`/`list`) on the resources in `deploy/helm/kubeoracle/templates/rbac.yaml`.
+- **Cluster access:** read-only (`get`/`list`) on the resources in `deploy/helm/kubesift/templates/rbac.yaml`.
   Write access is only needed for the opt-in fix actions.
 - **Secrets:** only key names, the Secret type and, for TLS Secrets, the certificate's subject, DNS names and
   expiry are kept. Values are discarded as soon as they are read. Set `rbac.readSecrets=false` to skip Secrets.
@@ -21,7 +21,7 @@ public issue. You'll get a reply within a few days.
 
 ## Hardening the server
 
-- Always set `KUBEORACLE_API_TOKEN`; the server (and `kubeoracle mcp --transport streamable-http`) refuses to
+- Always set `KUBESIFT_API_TOKEN`; the server (and `kubesift mcp --transport streamable-http`) refuses to
   listen on a non-local address without it. The token protects the API, the Alertmanager webhook and `/mcp`.
 - Releases are signed with cosign (keyless) and ship an SBOM and SLSA provenance; see
   [docs/releasing.md](docs/releasing.md#verifying-a-release-what-users-and-security-teams-run).

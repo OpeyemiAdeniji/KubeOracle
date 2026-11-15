@@ -1,6 +1,6 @@
 import pytest
 
-from kubeoracle.checks import run_checks
+from kubesift.checks import run_checks
 
 
 def by_check(findings):
@@ -87,7 +87,7 @@ def test_namespace_filter(snap, settings):
 
 
 def test_broken_check_does_not_break_scan(snap, settings, monkeypatch):
-    from kubeoracle.checks.base import REGISTRY
+    from kubesift.checks.base import REGISTRY
 
     def boom(ctx):
         raise RuntimeError("bad check")
@@ -100,7 +100,7 @@ def test_broken_check_does_not_break_scan(snap, settings, monkeypatch):
 
 
 def test_snapshot_roundtrip(snap, settings):
-    from kubeoracle.cluster.snapshot import Snapshot
+    from kubesift.cluster.snapshot import Snapshot
 
     again = Snapshot.from_dict(snap.to_dict())
     assert {f.fingerprint for f in run_checks(again, settings)} == {f.fingerprint for f in run_checks(snap, settings)}

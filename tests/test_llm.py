@@ -6,9 +6,9 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
 
-from kubeoracle.analysis.engine import DIAGNOSIS_SCHEMA
-from kubeoracle.analysis.llm import AnthropicProvider, LLMError, OpenAICompatibleProvider, parse_json
-from kubeoracle.config import Settings
+from kubesift.analysis.engine import DIAGNOSIS_SCHEMA
+from kubesift.analysis.llm import AnthropicProvider, LLMError, OpenAICompatibleProvider, parse_json
+from kubesift.config import Settings
 
 ANSWER = {"summary": "s", "root_causes": [], "next_checks": []}
 
