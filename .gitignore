@@ -16,3 +16,15 @@ node_modules/
 .env.*
 !.env.example
 !.env.*.example
+
+# Python / tooling
+.venv/
+dist/
+.ruff_cache/
+.coverage
+*.egg-info/
+
+# KubeOracle outputs
+e2e-report.json
+kubeoracle-snapshot.json
+kubeoracle.sarif

@@ -1,0 +1,15 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dns-test
+  namespace: default
+  labels:
+    scenario: netpol-blocks-dns
+spec:
+  podSelector:
+    matchLabels:
+      app: selector-test
+  policyTypes: [Egress]
+  egress:
+    - ports:
+        - port: 5432

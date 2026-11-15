@@ -1,0 +1,26 @@
+# Version 2 of rollout-test: drops API_URL, which the new code requires.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rollout-test
+  namespace: default
+  labels:
+    scenario: bad-rollout
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: rollout-test
+  template:
+    metadata:
+      labels:
+        app: rollout-test
+    spec:
+      containers:
+        - name: app
+          image: python:3.12-slim
+          command: ["python", "-c", "import os; print(os.environ['API_URL'])"]
+          ports: [{containerPort: 8080}]
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+            limits: {memory: 128Mi}

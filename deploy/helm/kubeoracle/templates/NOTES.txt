@@ -1,0 +1,15 @@
+KubeOracle is running (read-only{{ if .Values.rbac.allowWrites }}, guarded fixes ENABLED{{ end }}).
+
+Open the dashboard:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "kubeoracle.name" . }} 8080:{{ .Values.service.port }}
+  then browse to http://localhost:8080
+
+API token:
+  kubectl -n {{ .Release.Namespace }} get secret {{ include "kubeoracle.secretName" . }} -o jsonpath="{.data.api-token}" | base64 -d
+
+Alertmanager receiver (route alerts here for automatic investigation):
+  url: http://{{ include "kubeoracle.name" . }}.{{ .Release.Namespace }}.svc/api/v1/webhooks/alertmanager
+  http_config: authorization: credentials: <api token>
+
+LLM: {{ .Values.llm.provider }}{{ if eq .Values.llm.provider "none" }} (rule-based diagnosis; set llm.provider to add AI explanations){{ end }}
+Background scan every {{ .Values.scan.interval }}s; notifications for new {{ .Values.scan.notifyMinSeverity }}+ problems.

@@ -1,0 +1,12 @@
+{
+  "crashloop-test": ["pod-crashloop"],
+  "imagepull-test": ["pod-image-pull"],
+  "oomkilled-test": ["pod-oomkilled"],
+  "selector-test-svc": ["service-no-endpoints"],
+  "probe-test": ["pod-crashloop", "pod-restarting"],
+  "pending-test": ["pod-pending"],
+  "secret-test": ["pod-config-error", "config-ref-missing"],
+  "pvc-test": ["pvc-pending"],
+  "dns-test": ["netpol-blocks-dns"],
+  "rollout-test": ["pod-crashloop"]
+}

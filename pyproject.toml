@@ -1,0 +1,63 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "kubeoracle"
+dynamic = ["version"]
+description = "Kubernetes troubleshooting that explains itself: evidence-based diagnosis, change correlation, cost and upgrade checks. CLI, kubectl plugin, MCP server and in-cluster service."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Opeyemi Adeniji" }]
+keywords = ["kubernetes", "k8s", "troubleshooting", "sre", "devops", "mcp", "llm", "kubectl-plugin"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Intended Audience :: System Administrators",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Topic :: System :: Monitoring",
+  "Topic :: System :: Systems Administration",
+]
+dependencies = [
+  "kubernetes>=31",
+  "typer>=0.12",
+  "rich>=13",
+  "pyyaml>=6",
+  "httpx>=0.27",
+  "pydantic>=2.7",
+  "cryptography>=42",
+]
+
+[project.optional-dependencies]
+server = ["fastapi>=0.110", "uvicorn[standard]>=0.29"]
+mcp = ["mcp>=2,<3"]
+anthropic = ["anthropic>=1"]
+all = ["kubeoracle[server,mcp,anthropic]"]
+dev = ["kubeoracle[all]", "pytest>=8", "ruff>=0.6", "pytest-cov>=5"]
+
+[project.scripts]
+kubeoracle = "kubeoracle.cli:main"
+kubectl-oracle = "kubeoracle.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/OpeyemiAdeniji/KubeOracle"
+Issues = "https://github.com/OpeyemiAdeniji/KubeOracle/issues"
+
+[tool.hatch.version]
+path = "src/kubeoracle/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/kubeoracle"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM"]
+ignore = ["E501", "B008"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

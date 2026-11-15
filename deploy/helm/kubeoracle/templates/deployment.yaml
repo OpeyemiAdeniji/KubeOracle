@@ -1,0 +1,113 @@
+{{- $secret := include "kubeoracle.secretName" . }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "kubeoracle.name" . }}
+  labels: {{- include "kubeoracle.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  strategy:
+    type: Recreate   # single writer to the SQLite volume
+  selector:
+    matchLabels: {{- include "kubeoracle.selector" . | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "kubeoracle.selector" . | nindent 8 }}
+      annotations:
+        checksum/config: {{ toJson .Values | sha256sum }}
+    spec:
+      serviceAccountName: {{ include "kubeoracle.name" . }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: kubeoracle
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: [serve, --host, 0.0.0.0, --port, "8080"]
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: KUBEORACLE_LLM_PROVIDER
+              value: {{ .Values.llm.provider | quote }}
+            {{- with .Values.llm.model }}
+            - name: KUBEORACLE_LLM_MODEL
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.llm.baseUrl }}
+            - name: KUBEORACLE_LLM_BASE_URL
+              value: {{ . | quote }}
+            {{- end }}
+            - name: KUBEORACLE_SEND_LOGS_TO_LLM
+              value: {{ .Values.llm.sendLogs | quote }}
+            {{- with .Values.prometheus.url }}
+            - name: KUBEORACLE_PROMETHEUS_URL
+              value: {{ . | quote }}
+            {{- end }}
+            - name: KUBEORACLE_SCAN_INTERVAL
+              value: {{ .Values.scan.interval | quote }}
+            {{- with .Values.scan.namespace }}
+            - name: KUBEORACLE_SCAN_NAMESPACE
+              value: {{ . | quote }}
+            {{- end }}
+            - name: KUBEORACLE_NOTIFY_MIN_SEVERITY
+              value: {{ .Values.scan.notifyMinSeverity | quote }}
+            - name: KUBEORACLE_ALLOW_WRITES
+              value: {{ .Values.rbac.allowWrites | quote }}
+            {{- with .Values.notifications.webhookUrl }}
+            - name: KUBEORACLE_WEBHOOK_URL
+              value: {{ . | quote }}
+            {{- end }}
+            {{- range $env, $key := dict "KUBEORACLE_API_TOKEN" "api-token" "ANTHROPIC_API_KEY" "anthropic-api-key" "OPENAI_API_KEY" "openai-api-key" "OPENROUTER_API_KEY" "openrouter-api-key" "KUBEORACLE_SLACK_WEBHOOK_URL" "slack-webhook-url" "KUBEORACLE_TEAMS_WEBHOOK_URL" "teams-webhook-url" }}
+            - name: {{ $env }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secret }}
+                  key: {{ $key }}
+                  optional: {{ ne $env "KUBEORACLE_API_TOKEN" }}
+            {{- end }}
+          readinessProbe:
+            httpGet: {path: /readyz, port: http}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 20
+            failureThreshold: 6
+          startupProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 3
+            failureThreshold: 30
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: data
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "kubeoracle.name" . }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: tmp
+          emptyDir: {}
+      {{- with .Values.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity: {{- toYaml . | nindent 8 }}
+      {{- end }}
