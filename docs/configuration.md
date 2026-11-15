@@ -35,9 +35,11 @@ KubeSift never needs an LLM: every finding comes from deterministic checks. An L
 |---|---|---|
 | `llm_provider` | `auto` | `auto` picks the first of `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`, `OPENAI_API_KEY` that is set, else `none` |
 | `llm_model` | per provider | Anthropic: `claude-opus-5-5` |
-| `llm_base_url` | per provider | Any OpenAI-compatible endpoint (vLLM, LiteLLM, Azure gateway) |
+| `llm_base_url` | per provider | Any OpenAI-compatible endpoint (vLLM, LiteLLM, Azure gateway), or your Ollama server |
 | `llm_api_key` | from provider env var | |
 | `llm_effort` | `medium` | Anthropic effort: `low`, `medium`, `high` |
+| `llm_timeout` | `180` (`900` for Ollama) | Seconds to wait for one answer. A slow answer is not retried |
+| `llm_context` | sized to the prompt | Ollama only: context window in tokens (8192–32768 by default) |
 | `send_logs_to_llm` | `true` | `false` keeps log lines out of prompts |
 
 The Anthropic provider sends requests with server-side refusal fallback enabled (`fallbacks: "default"`), so a
@@ -50,6 +52,13 @@ addresses in log lines are redacted before anything is stored or sent. To keep e
 ```bash
 export KUBESIFT_LLM_PROVIDER=ollama KUBESIFT_LLM_MODEL=llama3.1
 ```
+
+KubeSift talks to Ollama's native API: it turns off hidden reasoning ("thinking") so answers come faster, sizes the
+context window to the prompt (Ollama's default window is small and silently drops the start of a long prompt), and
+constrains the output to the expected JSON. A diagnosis prompt is a few thousand tokens. On a machine with a GPU a
+7–8B model answers in seconds; on a laptop CPU it can take many minutes, so raise `llm_timeout`, pick a smaller
+model, use one of Ollama's cloud models, or run with `--no-llm`. If the model does not answer in time KubeSift
+shows the rule-based diagnosis instead.
 
 ## Usage data and cost
 
