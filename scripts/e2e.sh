@@ -11,8 +11,8 @@ fi
 kubectl config use-context "kind-$CLUSTER"
 
 "$ROOT/test-scenarios/apply-scenario.sh" all
-echo "Waiting 120s for failures to develop (crash loops, OOM kills, pull back-offs)..."
-sleep 120
+echo "Waiting 150s for failures to develop (crash loops, OOM kills, pull back-offs)..."
+sleep 150
 
 kubeoracle diagnose -n default --no-llm -o json > "$ROOT/e2e-report.json" || true
 kubeoracle diagnose -n default --no-llm -v || true

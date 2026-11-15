@@ -40,7 +40,7 @@ A Job hit its backoffLimit or activeDeadlineSeconds.
 
 **Container is crash looping** · critical · problem
 
-A container keeps exiting and Kubernetes backs off restarting it.
+A container keeps exiting with an error and Kubernetes keeps restarting it.
 
 ### pod-image-pull
 

@@ -119,3 +119,18 @@ def test_runbooks(tmp_path, settings):
     assert any("API OOM playbook" in n and "wiki.example.com" in n for n in oom.notes)
     crash = next(f for f in report.findings if f.check == "pod-crashloop")
     assert not any("playbook" in n for n in crash.notes)
+
+
+def test_crashloop_between_backoffs(settings):
+    """kubectl shows Error or Running between restarts; it is still a crash loop."""
+    error_now = pod("a", statuses=[{"name": "app", "ready": False, "restartCount": 2,
+                                    "state": {"terminated": {"exitCode": 1, "reason": "Error", "finishedAt": ts(minutes_ago=0.1)}},
+                                    "lastState": {"terminated": {"exitCode": 1, "reason": "Error", "finishedAt": ts(minutes_ago=1)}}}])
+    running_again = pod("b", statuses=[{"name": "app", "ready": True, "restartCount": 4,
+                                        "state": {"running": {"startedAt": ts(minutes_ago=0.05)}},
+                                        "lastState": {"terminated": {"exitCode": 1, "reason": "Error", "finishedAt": ts(minutes_ago=0.1)}}}])
+    stable = pod("c", statuses=[{"name": "app", "ready": True, "restartCount": 4,
+                                 "state": {"running": {"startedAt": ts(days_ago=1)}},
+                                 "lastState": {"terminated": {"exitCode": 1, "reason": "Error", "finishedAt": ts(days_ago=1)}}}])
+    found = [f for f in run_checks(make(pods=[error_now, running_again, stable]), settings) if f.check == "pod-crashloop"]
+    assert {f.resource.name for f in found} == {"a", "b"}

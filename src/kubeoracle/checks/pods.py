@@ -93,15 +93,33 @@ def _pod_cmd(pod: dict[str, Any], what: str = "describe") -> str:
     return f"kubectl {what} pod {meta(pod).get('name')} -n {meta(pod).get('namespace')}"
 
 
+def is_crash_looping(cs: dict[str, Any]) -> bool:
+    """True for CrashLoopBackOff, and also between back-offs, when the container briefly shows
+    Error/Completed or Running again (what `kubectl get pods` prints as Error or Running with restarts)."""
+    state = cs.get("state") or {}
+    if (state.get("waiting") or {}).get("reason") == "CrashLoopBackOff":
+        return True
+    restarts = cs.get("restartCount", 0)
+    current = state.get("terminated") or {}
+    if current and current.get("exitCode", 0) != 0 and restarts >= 1:
+        return True
+    last = (cs.get("lastState") or {}).get("terminated") or {}
+    if restarts >= 3 and last and last.get("exitCode", 0) != 0:
+        a = age(last.get("finishedAt"))
+        return a is not None and a < timedelta(minutes=10)
+    return False
+
+
 @check("pod-crashloop", "Container is crash looping", Category.WORKLOAD, Severity.CRITICAL)
 def crashloop(ctx: Context) -> Iterator[Finding]:
-    """A container keeps exiting and Kubernetes backs off restarting it."""
+    """A container keeps exiting with an error and Kubernetes keeps restarting it."""
     for pod in ctx.snap.all("pods"):
+        if meta(pod).get("deletionTimestamp"):
+            continue
         for cs, is_init in _statuses(pod):
-            waiting = (cs.get("state") or {}).get("waiting") or {}
-            if waiting.get("reason") != "CrashLoopBackOff":
+            if not is_crash_looping(cs):
                 continue
-            last = (cs.get("lastState") or {}).get("terminated") or {}
+            last = (cs.get("lastState") or {}).get("terminated") or (cs.get("state") or {}).get("terminated") or {}
             code = last.get("exitCode")
             reason = last.get("reason", "")
             if reason == "OOMKilled":
@@ -118,7 +136,7 @@ def crashloop(ctx: Context) -> Iterator[Finding]:
             if code == 137 and _liveness_killed(ctx, pod):
                 hints.insert(0, "The liveness probe is failing and the kubelet kills the container; "
                                 "the app may be slow to start (add a startupProbe) or the probe checks the wrong port/path.")
-            msg = f"Container '{name}' is in CrashLoopBackOff"
+            msg = f"Container '{name}' keeps crashing ({cs.get('restartCount', 0)} restarts)"
             msg += f" (exit code {code})." if code is not None else "."
             if hints:
                 msg += " " + hints[0]
@@ -353,7 +371,7 @@ def restarting(ctx: Context) -> Iterator[Finding]:
         for cs, _ in _statuses(pod):
             restarts = cs.get("restartCount", 0)
             state = cs.get("state") or {}
-            if restarts < 5 or not state.get("running"):
+            if restarts < 5 or not state.get("running") or is_crash_looping(cs):
                 continue
             last = (cs.get("lastState") or {}).get("terminated") or {}
             if last.get("reason") == "OOMKilled":
