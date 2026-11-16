@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 from kubesift import __version__, notify
 from kubesift.analysis.changes import detect_changes
 from kubesift.analysis.engine import ask, explain_resource, investigate, snapshot_for
+from kubesift.analysis.engine import explain as llm_explain
 from kubesift.cluster.client import KubeClient, list_contexts
 from kubesift.config import Settings
 from kubesift.leader import AlwaysLeader, LeaderElector, pod_namespace
@@ -37,6 +38,9 @@ class DiagnoseRequest(BaseModel):
     context: str | None = None
     llm: bool = True
     since: str = "6h"
+    # false: return the rule-based report at once and add the LLM explanation in the background
+    # (poll GET /api/v1/history/{id} until llm_pending is false). Useful with slow local models.
+    wait_for_llm: bool = True
 
 
 class AskRequest(BaseModel):
@@ -157,13 +161,29 @@ def create_app(settings: Settings) -> FastAPI:
             raise HTTPException(status_code=500, detail=str(exc)) from exc
         return {"contexts": items, "current": current}
 
+    pending: set[str] = set()
+
+    def explain_later(rid: str, report: Report) -> None:
+        try:
+            with _LLM_SLOTS:
+                report.diagnosis = llm_explain(settings, report, use_llm=True)
+                store.update_report(rid, report)
+        except Exception:
+            log.exception("background LLM explanation failed for report %s", rid)
+        finally:
+            pending.discard(rid)
+
     @app.post("/api/v1/diagnose", dependencies=[Depends(auth)])
     def diagnose(req: DiagnoseRequest) -> dict[str, Any]:
-        report = investigate(settings, snap(req.namespace, req.context), use_llm=req.llm,
+        later = req.llm and not req.wait_for_llm and settings.resolved_provider() != "none"
+        report = investigate(settings, snap(req.namespace, req.context), use_llm=req.llm and not later,
                              window=parse_duration(req.since), store=store)
         rid = store.save_report(report, source="api", retention_days=settings.history_days)
         state["last_report"] = report
-        return {"id": rid, **report.model_dump(mode="json")}
+        if later and report.incidents:
+            pending.add(rid)
+            threading.Thread(target=explain_later, args=(rid, report), daemon=True, name=f"llm-{rid}").start()
+        return {"id": rid, "llm_pending": rid in pending, **report.model_dump(mode="json")}
 
     @app.post("/api/v1/ask", dependencies=[Depends(auth)])
     def ask_question(req: AskRequest) -> dict[str, Any]:
@@ -210,7 +230,7 @@ def create_app(settings: Settings) -> FastAPI:
         report = store.get_report(rid)
         if report is None:
             raise HTTPException(status_code=404, detail="not found")
-        return report.model_dump(mode="json")
+        return {"id": rid, "llm_pending": rid in pending, **report.model_dump(mode="json")}
 
     @app.post("/api/v1/fix", dependencies=[Depends(auth)])
     def fix(req: FixRequest) -> dict[str, Any]:
@@ -369,6 +389,7 @@ def create_app(settings: Settings) -> FastAPI:
     return app
 
 
+_LLM_SLOTS = threading.BoundedSemaphore(2)  # at most two background LLM explanations at a time
 _ALERT_SLOTS = threading.BoundedSemaphore(2)  # at most two alert investigations at a time
 
 
@@ -408,8 +429,7 @@ def _scan_loop(settings: Settings, store: Store, state: dict[str, Any]) -> None:
             urgent = [f for f in report.findings if f.kind == "problem" and f.severity.rank >= threshold]
             fresh = store.new_findings(report.cluster, urgent)
             if fresh:
-                from kubesift.analysis.engine import explain
-                report.diagnosis = explain(settings, report, use_llm=True)
+                report.diagnosis = llm_explain(settings, report, use_llm=True)
                 store.save_report(report, source="scan", retention_days=settings.history_days)
                 notify.send(settings, report, fresh)
         except Exception as exc:

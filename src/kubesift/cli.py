@@ -100,8 +100,10 @@ def _snapshot(namespace: str | None, from_file: str | None = None, with_logs: bo
     try:
         with err.status("Reading cluster state…"):
             return snapshot_for(state.settings, namespace, with_logs=with_logs)
-    except Exception as exc:  # kubeconfig missing, cluster unreachable
-        _fail(f"cannot connect to the cluster: {exc}")
+    except Exception as exc:  # kubeconfig missing, cluster unreachable, login rejected
+        from kubesift.cluster.client import ClusterAccessError
+
+        _fail(str(exc) if isinstance(exc, ClusterAccessError) else f"cannot connect to the cluster: {exc}")
 
 
 def _store():
@@ -535,15 +537,16 @@ def doctor() -> None:
         mark = {True: "[green]✓[/]", False: "[red]✗[/]", None: "[yellow]![/]"}[good]
         console.print(f"{mark} {text}")
 
+    connected = False
     try:
         client = KubeClient(kubeconfig=s.kubeconfig, context=s.context, timeout=s.request_timeout)
-        version = client.server_version()
-        line(bool(version), f"cluster {client.context_name}: Kubernetes {version or 'unreachable'}")
-        ok &= bool(version)
-    except Exception as exc:
-        line(False, f"kubeconfig/cluster: {exc}")
-        raise typer.Exit(1) from None
-    if version:
+        version = client.check_connection()
+        connected = True
+        line(True, f"cluster {client.context_name}: Kubernetes {version or '(version hidden)'}")
+    except Exception as exc:  # unreachable, login rejected, bad kubeconfig: still check the rest
+        ok = False
+        line(False, str(exc))
+    if connected:
         missing = []
         for key, _, prefix, plural, _, optional in KINDS:
             if optional and key != "secrets":

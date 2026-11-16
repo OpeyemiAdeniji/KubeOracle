@@ -104,6 +104,10 @@ class Store:
                     json.dumps(report.counts()), summary, report.model_dump_json()))
         return rid
 
+    def update_report(self, rid: str, report: Report) -> None:
+        summary = report.diagnosis.summary if report.diagnosis else ""
+        self._exec("UPDATE reports SET summary = ?, body = ? WHERE id = ?", (summary, report.model_dump_json(), rid))
+
     def list_reports(self, limit: int = 20) -> list[dict[str, Any]]:
         rows = self._exec("SELECT id, created, cluster, namespace, question, source, counts, summary FROM reports "
                           "ORDER BY created DESC LIMIT ?", (limit,)).fetchall()

@@ -113,3 +113,55 @@ def test_alert_dedupe(snap, settings):
     first = store.new_findings("c", report.findings)
     second = store.new_findings("c", report.findings)
     assert first and not second
+
+
+def test_cited_evidence_ids_are_accepted(snap, settings, monkeypatch):
+    base = investigate(settings, snap, use_llm=False)
+    crash = next(f for f in base.findings if f.check == "pod-crashloop")
+    fake = FakeProvider({"summary": "s", "next_checks": [], "root_causes": [
+        {"title": "exact", "explanation": "x", "confidence": 90, "evidence_ids": [crash.fingerprint],
+         "fix_steps": [], "commands": []},
+        {"title": "wrapped", "explanation": "x", "confidence": 90, "evidence_ids": [f"finding {crash.fingerprint}"],
+         "fix_steps": [], "commands": []},
+        {"title": "invented", "explanation": "x", "confidence": 90, "evidence_ids": ["000000000000"],
+         "fix_steps": [], "commands": []}]})
+    monkeypatch.setattr(engine, "get_provider", lambda s: fake)
+    report = investigate(settings, snap, use_llm=True)
+    exact, wrapped, invented = report.diagnosis.root_causes
+    assert exact.evidence == [crash.fingerprint] and exact.confidence == 90
+    assert wrapped.evidence == [crash.fingerprint] and wrapped.confidence == 90
+    assert invented.evidence == [] and invented.confidence == 40
+    assert f'"id": "{crash.fingerprint}"' in fake.prompts[0] and '"facts"' in fake.prompts[0]
+
+
+def test_ai_eval_script_scores_a_model(settings, monkeypatch):
+    import importlib.util
+    from pathlib import Path
+
+    from fixtures import broken_cluster
+
+    spec = importlib.util.spec_from_file_location("eval_ai", Path(__file__).parent.parent / "scripts" / "eval_ai.py")
+    ev = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ev)
+    rules = investigate(settings, broken_cluster(), use_llm=False)
+    crash = next(f for f in rules.findings if f.check == "pod-crashloop").fingerprint
+    oom = next(f for f in rules.findings if f.check == "pod-oomkilled").fingerprint
+
+    class Good(Provider):
+        name = "good"
+
+        def complete_json(self, system, user, schema):
+            if "Question:" in user:
+                return {"answer": "DATABASE_URL was removed", "confidence": 80, "evidence_ids": [crash],
+                        "commands": [], "follow_up": []}
+            return {"summary": "s", "next_checks": [], "root_causes": [
+                {"title": "bad rollout", "explanation": "x", "confidence": 90, "evidence_ids": [crash],
+                 "fix_steps": [], "commands": []},
+                {"title": "oom", "explanation": "x", "confidence": 90, "evidence_ids": [oom],
+                 "fix_steps": [], "commands": []}]}
+
+    monkeypatch.setattr(engine, "get_provider", lambda s: Good())
+    result = ev.evaluate(settings)
+    assert result["coverage"] == 0.4 and result["cited"] == 1.0
+    assert result["found"]["pod-crashloop"] and not result["found"]["node-not-ready"]
+    assert result["questions"][0]["right_evidence"] and result["questions"][0]["mentions"]

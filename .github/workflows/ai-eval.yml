@@ -1,0 +1,56 @@
+name: AI eval
+
+# Grades a real LLM on the demo broken cluster (scripts/eval_ai.py). Run it by hand from the Actions tab, for
+# example before a release or after changing the prompt. It needs the provider's API key as a repository secret
+# (ANTHROPIC_API_KEY, OPENAI_API_KEY or OPENROUTER_API_KEY); without one it skips instead of failing.
+
+on:
+  workflow_dispatch:
+    inputs:
+      provider:
+        description: LLM provider
+        type: choice
+        options: [anthropic, openai, openrouter]
+        default: anthropic
+      model:
+        description: Model name (empty = the provider's default)
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      PROVIDER: ${{ inputs.provider }}
+      MODEL: ${{ inputs.model }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[anthropic]"
+      - name: Grade the model
+        shell: bash  # pipefail, so a failing grade is not hidden by tee
+        run: |
+          key_var="$(echo "$PROVIDER" | tr '[:lower:]' '[:upper:]')_API_KEY"
+          if [ -z "${!key_var}" ]; then
+            echo "::notice::No $key_var secret; add it under Settings > Secrets and variables > Actions to run the AI eval."
+            exit 0
+          fi
+          args=(--provider "$PROVIDER" --json ai-eval.json)
+          if [ -n "$MODEL" ]; then args+=(--model "$MODEL"); fi
+          python scripts/eval_ai.py "${args[@]}" | tee ai-eval.txt
+          { echo '```'; cat ai-eval.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ai-eval
+          path: ai-eval.*
+          if-no-files-found: ignore
