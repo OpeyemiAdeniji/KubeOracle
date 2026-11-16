@@ -133,3 +133,38 @@ def test_mcp_tools(settings):
     assert "apply_fix" not in names
     settings.allow_writes = True
     assert "apply_fix" in {t.name for t in asyncio.run(build_server(settings).list_tools())}
+
+
+def test_server_adds_llm_explanation_in_background(snap, settings, monkeypatch):
+    import threading
+    import time
+
+    from fastapi.testclient import TestClient
+
+    from kubesift.analysis import engine
+    from kubesift.analysis.llm import Provider
+    from kubesift.server import app as server_app
+
+    release = threading.Event()
+
+    class Slow(Provider):
+        name = "slow"
+
+        def complete_json(self, system, user, schema):
+            release.wait(5)
+            return {"summary": "AI says checkout broke after 1.5.", "root_causes": [], "next_checks": []}
+
+    monkeypatch.setattr(server_app, "snapshot_for", lambda *a, **k: snap)
+    monkeypatch.setattr(engine, "get_provider", lambda s: Slow())
+    settings.llm_provider = "ollama"
+    client = TestClient(server_app.create_app(settings))
+    r = client.post("/api/v1/diagnose", json={"llm": True, "wait_for_llm": False}).json()
+    assert r["llm_pending"] is True and r["diagnosis"]["generated_by"] == "rules" and r["findings"]
+    assert client.get(f"/api/v1/history/{r['id']}").json()["llm_pending"] is True
+    release.set()
+    for _ in range(50):
+        item = client.get(f"/api/v1/history/{r['id']}").json()
+        if not item["llm_pending"]:
+            break
+        time.sleep(0.1)
+    assert item["llm_pending"] is False and item["diagnosis"]["summary"].startswith("AI says")

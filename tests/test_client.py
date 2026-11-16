@@ -3,6 +3,7 @@
 import json
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 import pytest
@@ -116,3 +117,47 @@ def test_fix_dry_run_and_patch(fake_api, settings):
     patch = [s for s in seen if s[0] == "PATCH"]
     assert patch and "dryRun=All" in patch[0][1] and patch[0][2] == "application/strategic-merge-patch+json"
     assert store.list_audit()[0]["action"] == "restart"
+
+
+def _kubeconfig(path, server, user):
+    path.write_text(yaml.safe_dump({
+        "apiVersion": "v1", "kind": "Config", "current-context": "c",
+        "clusters": [{"name": "c", "cluster": {"server": server}}],
+        "users": [{"name": "u", "user": user}],
+        "contexts": [{"name": "c", "context": {"cluster": "c", "user": "u"}}],
+    }))
+    return str(path)
+
+
+def test_rejected_login_fails_fast_instead_of_an_empty_report(fake_api, tmp_path):
+    from kubesift.cluster.client import ClusterAccessError, KubeClient
+    from kubesift.cluster.snapshot import collect
+
+    kubeconfig, _ = fake_api
+    server = yaml.safe_load(Path(kubeconfig).read_text())["clusters"][0]["cluster"]["server"]
+    bad = _kubeconfig(tmp_path / "bad", server, {"token": "expired"})
+    with pytest.raises(ClusterAccessError, match="rejected the login"):
+        collect(KubeClient(kubeconfig=bad))
+
+
+def test_unreachable_cluster_fails_fast(tmp_path):
+    from kubesift.cluster.client import ClusterAccessError, KubeClient
+    from kubesift.cluster.snapshot import collect
+
+    down = _kubeconfig(tmp_path / "down", "http://127.0.0.1:9", {"token": "x"})
+    with pytest.raises(ClusterAccessError, match="cannot reach the API server for context 'c'"):
+        collect(KubeClient(kubeconfig=down, timeout=5))
+
+
+def test_failing_login_helper_is_reported(tmp_path):
+    import sys
+
+    from kubesift.cluster.client import ClusterAccessError, KubeClient
+
+    helper = {"exec": {"apiVersion": "client.authentication.k8s.io/v1beta1", "command": sys.executable,
+                       "args": ["-c", "import sys; sys.stderr.write('invalid_grant: Account has been deleted'); "
+                                      "sys.exit(1)"],
+                       "interactiveMode": "Never"}}
+    cfg = _kubeconfig(tmp_path / "exec", "https://127.0.0.1:9", helper)
+    with pytest.raises(ClusterAccessError, match="login command for context 'c' failed.*Account has been deleted"):
+        KubeClient(kubeconfig=cfg)

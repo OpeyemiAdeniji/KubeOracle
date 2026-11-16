@@ -235,7 +235,8 @@ def collect(
 
     check_name(namespace, "namespace")
     snap = Snapshot(context=client.context_name, namespace=namespace, live=True)
-    snap.server_version = client.server_version()
+    probe = getattr(client, "check_connection", None)
+    snap.server_version = probe(namespace) if probe else client.server_version()
 
     def fetch(entry: tuple[str, str, str, str, bool, bool]) -> None:
         key, kind, prefix, plural, namespaced, optional = entry

@@ -104,6 +104,21 @@ function reportView(r) {
     r.warnings.map(w => `<p class="muted">! ${esc(w)}</p>`).join("");
 }
 
+// Rule-based results show at once; the LLM explanation is filled in when it arrives (local models can take minutes).
+function showReport(out, r) {
+  out.innerHTML = reportView(r) + (r.llm_pending ? `<p class="muted" id="llm-wait">AI explanation in progress… this page updates when it is ready.</p>` : "");
+  if (!r.llm_pending) return;
+  const poll = () => setTimeout(async () => {
+    if (!document.body.contains(out) || !$("#llm-wait")) return;  // user moved on
+    try {
+      const next = await api("/api/v1/history/" + encodeURIComponent(r.id));
+      if (next.llm_pending) return poll();
+      out.innerHTML = reportView(next);
+    } catch (e) { const w = $("#llm-wait"); if (w) w.textContent = "AI explanation unavailable: " + e.message; }
+  }, 5000);
+  poll();
+}
+
 const views = {
   Diagnose: () => `<div class="bar">${nsInput}<label><input type="checkbox" id="llm" checked> use LLM</label><button class="go" id="go">Diagnose</button></div><div id="out"></div>`,
   Ask: () => `<div class="bar"><input id="q" placeholder="Why is checkout failing in shop?" style="flex:1;min-width:240px">${nsInput}<button class="go" id="go">Ask</button></div><div id="out"></div>`,
@@ -115,7 +130,7 @@ const views = {
 };
 
 const actions = {
-  Diagnose: out => api("/api/v1/diagnose", {method: "POST", body: JSON.stringify({namespace: $("#ns").value || null, llm: $("#llm").checked})}).then(r => out.innerHTML = reportView(r)),
+  Diagnose: out => api("/api/v1/diagnose", {method: "POST", body: JSON.stringify({namespace: $("#ns").value || null, llm: $("#llm").checked, wait_for_llm: false})}).then(r => showReport(out, r)),
   Ask: out => api("/api/v1/ask", {method: "POST", body: JSON.stringify({question: $("#q").value, namespace: $("#ns").value || null})})
     .then(r => out.innerHTML = `<div class="card"><h3>${esc(r.answer.answer)}</h3><p class="muted">${r.answer.confidence}% confidence · ${esc(r.answer.generated_by)}</p>${(r.answer.commands||[]).map(c => `<pre>${esc(c)}</pre>`).join("")}${(r.answer.follow_up||[]).map(x => `<div>→ ${esc(x)}</div>`).join("")}</div><div class="card"><h3>Supporting findings</h3>${findingRows(r.report.findings)}</div>`),
   Changes: out => api(`/api/v1/changes?since=${$("#since").value}${$("#ns").value ? "&namespace=" + encodeURIComponent($("#ns").value) : ""}`)
@@ -137,7 +152,7 @@ async function render() {
     try {
       const rows = await api("/api/v1/history");
       out.innerHTML = `<div class="card"><table><tr><th>When (UTC)</th><th>Cluster</th><th class="hide-sm">Source</th><th>Crit/High</th><th>Summary</th></tr>${rows.map(r => `<tr data-id="${esc(r.id)}" style="cursor:pointer"><td>${esc(r.created.slice(0,16).replace("T"," "))}</td><td>${esc(r.cluster)}<div class="muted">${esc(r.namespace || "all")}</div></td><td class="hide-sm">${esc(r.source)}</td><td>${r.counts.critical || 0}/${r.counts.high || 0}</td><td>${esc(r.question || r.summary)}</td></tr>`).join("")}</table></div>`;
-      out.querySelectorAll("tr[data-id]").forEach(tr => tr.onclick = async () => out.innerHTML = reportView(await api("/api/v1/history/" + tr.dataset.id)));
+      out.querySelectorAll("tr[data-id]").forEach(tr => tr.onclick = async () => showReport(out, await api("/api/v1/history/" + tr.dataset.id)));
     } catch (e) { out.innerHTML = `<p class="err">${esc(e.message)}</p>`; }
     return;
   }

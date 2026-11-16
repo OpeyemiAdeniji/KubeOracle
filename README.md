@@ -117,7 +117,8 @@ and `lint` takes `-o sarif` (GitHub code scanning). `--fail-on high` makes CI fa
 - Tokens, passwords, API keys, connection-string credentials and emails are redacted from logs before they are
   stored or sent. `send_logs_to_llm: false` keeps logs out of prompts entirely.
 - LLM answers must cite real findings; uncited claims are capped at 40% confidence. Any LLM failure falls back
-  to the rule-based diagnosis.
+  to the rule-based diagnosis. `python scripts/eval_ai.py --provider <name>` scores a model on the demo cluster
+  (does it find the real causes, does it cite real evidence) before you rely on it.
 - Read-only by default. Fixes need an explicit confirmation (CLI) or `allow_writes` (server/MCP), always run a
   server-side dry run first and are written to an audit log.
 
@@ -137,4 +138,5 @@ and `lint` takes `-o sarif` (GitHub code scanning). `--fail-on high` makes CI fa
 pip install -e ".[dev]"
 pytest                          # unit tests on a synthetic broken cluster
 ./scripts/e2e.sh                # breaks a kind cluster on purpose and checks every failure is explained
+python scripts/eval_ai.py --provider anthropic   # grades an LLM's explanations (needs its API key)
 ```

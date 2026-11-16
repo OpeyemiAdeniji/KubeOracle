@@ -27,6 +27,11 @@ cost_gb_hour: 0.0042
 Inside a pod, KubeSift uses the service account automatically. It needs **read** access only; see
 `deploy/helm/kubesift/templates/rbac.yaml` for the exact rules. Missing permissions are reported, not fatal.
 
+Before reading anything KubeSift checks that the cluster answers and accepts the login, and stops with an error
+(exit code 1) when it doesn't, instead of producing an empty report that looks healthy. The message names the
+context and the cause: unreachable API server, login rejected (expired, revoked or deleted account), or a
+failing login helper such as `gke-gcloud-auth-plugin`. `kubesift doctor` runs the same check.
+
 ## LLM
 
 KubeSift never needs an LLM: every finding comes from deterministic checks. An LLM only ranks and explains them.
@@ -98,3 +103,7 @@ Without Prometheus, metrics-server's current usage is used (one sample; treat as
 | `slack_webhook_url`, `teams_webhook_url`, `webhook_url` | none | Notifications for new problems and Alertmanager investigations |
 | `slack_signing_secret` | none | Enables the `/sift` Slack command and fix buttons (see [slack.md](slack.md)) |
 | `slack_allowed_users` | none | Slack user IDs allowed to apply fixes (comma-separated); empty means nobody; also needs `allow_writes` |
+
+The dashboard shows the rule-based report at once and fills in the LLM explanation when it arrives, so a slow
+local model never blocks it. API clients get the same with `POST /api/v1/diagnose {"wait_for_llm": false}`: the
+response has `llm_pending: true` and an `id`; poll `GET /api/v1/history/{id}` until `llm_pending` is false.

@@ -28,7 +28,8 @@ SYSTEM_PROMPT = """You are KubeSift, a senior Kubernetes SRE helping an on-call 
 You receive findings that deterministic checks proved from live cluster data, recent changes, and resource summaries.
 
 Rules:
-- Base every conclusion on the provided evidence. Cite the fingerprints of the findings you rely on in `evidence`.
+- Base every conclusion on the provided findings. Each finding has an `id` (12 hex characters) and `facts`.
+  List the `id` of every finding a conclusion rests on in `evidence_ids`, copied exactly, e.g. "3f2a9c1b7d0e".
 - Never invent resource names, versions, or log lines. If the data does not show the cause, say what is missing and how to get it.
 - Separate the root cause from its symptoms: a bad rollout, a config edit or a broken node often explains several findings.
 - When a recent change lines up with the start of a problem, say so and give the rollback command if one is provided.
@@ -47,12 +48,13 @@ DIAGNOSIS_SCHEMA: dict[str, Any] = {
             "items": {
                 "type": "object",
                 "additionalProperties": False,
-                "required": ["title", "explanation", "confidence", "evidence", "fix_steps", "commands"],
+                "required": ["title", "explanation", "confidence", "evidence_ids", "fix_steps", "commands"],
                 "properties": {
                     "title": {"type": "string"},
                     "explanation": {"type": "string"},
                     "confidence": {"type": "integer"},
-                    "evidence": {"type": "array", "items": {"type": "string"}},
+                    "evidence_ids": {"type": "array", "items": {"type": "string"},
+                                     "description": "The `id` values of the findings this cause rests on."},
                     "fix_steps": {"type": "array", "items": {"type": "string"}},
                     "commands": {"type": "array", "items": {"type": "string"}},
                 },
@@ -65,11 +67,12 @@ DIAGNOSIS_SCHEMA: dict[str, Any] = {
 ANSWER_SCHEMA: dict[str, Any] = {
     "type": "object",
     "additionalProperties": False,
-    "required": ["answer", "confidence", "evidence", "commands", "follow_up"],
+    "required": ["answer", "confidence", "evidence_ids", "commands", "follow_up"],
     "properties": {
         "answer": {"type": "string"},
         "confidence": {"type": "integer"},
-        "evidence": {"type": "array", "items": {"type": "string"}},
+        "evidence_ids": {"type": "array", "items": {"type": "string"},
+                         "description": "The `id` values of the findings the answer rests on."},
         "commands": {"type": "array", "items": {"type": "string"}},
         "follow_up": {"type": "array", "items": {"type": "string"}},
     },
@@ -149,9 +152,9 @@ def rules_diagnosis(report: Report) -> Diagnosis:
 def _finding_payload(f: Finding, logs: bool = True) -> dict[str, Any]:
     evidence = [e for e in f.evidence if logs or not e.startswith("log ")]
     return {
-        "fingerprint": f.fingerprint, "check": f.check, "severity": f.severity.value, "resource": str(f.resource),
+        "id": f.fingerprint, "check": f.check, "severity": f.severity.value, "resource": str(f.resource),
         "owner": str(f.owner) if f.owner else None, "node": f.node, "message": f.message,
-        "evidence": evidence[:8], "suggested_fix": f.remediation, "commands": f.commands[:3],
+        "facts": evidence[:8], "suggested_fix": f.remediation, "commands": f.commands[:3],
         "started": f.since.isoformat() if f.since else None,
         "related_changes": [c.summary + (f" [rollback: {c.rollback_command}]" if c.rollback_command else "")
                             for c in f.related_changes],
@@ -164,7 +167,7 @@ def _context_json(report: Report, extra: dict[str, Any] | None = None, logs: boo
         "cluster": report.cluster, "namespace": report.namespace or "all", "kubernetes": report.server_version,
         "incidents": [{"title": i.title, "layer": i.layer, "severity": i.severity.value,
                        "findings": [_finding_payload(f, logs) for f in i.findings[:6]]} for i in report.incidents[:12]],
-        "risks": [{"fingerprint": f.fingerprint, "check": f.check, "resource": str(f.resource), "message": f.message}
+        "risks": [{"id": f.fingerprint, "check": f.check, "resource": str(f.resource), "message": f.message}
                   for f in report.findings if f.kind == "risk"][:25],
         "recent_changes": [{"time": c.time.isoformat(), "summary": c.summary, "details": c.details[:5],
                             "rollback": c.rollback_command} for c in report.changes[:15]],
@@ -201,11 +204,22 @@ def explain(settings: Settings, report: Report, use_llm: bool = True) -> Diagnos
         return base
 
 
+def _cited(item: dict[str, Any], known: set[str]) -> list[str]:
+    """Finding ids the model cited. Accepts an id wrapped in extra text ("finding 3f2a9c1b7d0e")."""
+    cited: list[str] = []
+    for raw in item.get("evidence_ids") or item.get("evidence") or []:
+        text = str(raw)
+        for fp in [text] if text in known else [k for k in known if k in text]:
+            if fp not in cited:
+                cited.append(fp)
+    return cited
+
+
 def _validated(data: dict[str, Any], report: Report, by: str) -> Diagnosis:
     known = {f.fingerprint for f in report.findings}
     causes = []
     for rc in data.get("root_causes") or []:
-        evidence = [e for e in rc.get("evidence") or [] if e in known]
+        evidence = _cited(rc, known)
         conf = max(0, min(100, int(rc.get("confidence", 0))))
         if not evidence:
             conf = min(conf, 40)  # unsupported claims cannot be confident
@@ -301,7 +315,7 @@ def ask(settings: Settings, snap: Snapshot, question: str, use_llm: bool = True,
             answer = {
                 "answer": str(data.get("answer", "")),
                 "confidence": max(0, min(100, int(data.get("confidence", 0)))),
-                "evidence": [e for e in data.get("evidence") or [] if e in known],
+                "evidence": _cited(data, known),
                 "commands": [str(c) for c in data.get("commands") or []][:6],
                 "follow_up": [str(c) for c in data.get("follow_up") or []][:5],
                 "generated_by": f"{provider.name}:{settings.resolved_model()}",
