@@ -161,3 +161,35 @@ def test_failing_login_helper_is_reported(tmp_path):
     cfg = _kubeconfig(tmp_path / "exec", "https://127.0.0.1:9", helper)
     with pytest.raises(ClusterAccessError, match="login command for context 'c' failed.*Account has been deleted"):
         KubeClient(kubeconfig=cfg)
+
+
+def test_kubeconfig_problems_are_explained(tmp_path, monkeypatch):
+    from kubesift.cluster.client import ClusterAccessError, KubeClient
+
+    monkeypatch.delenv("KUBERNETES_SERVICE_HOST", raising=False)
+    with pytest.raises(ClusterAccessError, match="no kubeconfig found at .*Fix: connect a cluster first"):
+        KubeClient(kubeconfig=str(tmp_path / "missing"))
+
+    empty = tmp_path / "empty"  # what is left after deleting every context, e.g. with kubectl config delete-context
+    empty.write_text(yaml.safe_dump({"apiVersion": "v1", "kind": "Config", "current-context": "",
+                                     "clusters": [], "contexts": [], "users": []}))
+    with pytest.raises(ClusterAccessError, match="has no clusters set up. Fix: connect a cluster first"):
+        KubeClient(kubeconfig=str(empty))
+
+    cfg = _kubeconfig(tmp_path / "one", "https://127.0.0.1:9", {"token": "x"})
+    with pytest.raises(ClusterAccessError, match="context 'prod' is not in the kubeconfig.*Available: c"):
+        KubeClient(kubeconfig=cfg, context="prod")
+
+    unset = yaml.safe_load(Path(cfg).read_text())
+    unset["current-context"] = ""
+    Path(cfg).write_text(yaml.safe_dump(unset))
+    with pytest.raises(ClusterAccessError, match="no current context is set.*Available: c"):
+        KubeClient(kubeconfig=cfg)
+
+    from kubesift.cluster.client import list_contexts
+
+    assert list_contexts(str(empty)) == ([], None)
+    items, current = list_contexts(cfg)  # current-context unset: still listed, nothing marked current
+    assert [c["name"] for c in items] == ["c"] and current is None
+    with pytest.raises(ClusterAccessError, match="no kubeconfig found"):
+        list_contexts(str(tmp_path / "missing"))
