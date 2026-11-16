@@ -129,6 +129,17 @@ def meta(obj: dict[str, Any]) -> dict[str, Any]:
     return obj.get("metadata") or {}
 
 
+def provider_managed(obj: dict[str, Any]) -> bool:
+    """True for objects the cloud provider's add-on manager owns (GKE, AKS, EKS add-ons, kube-up addons).
+
+    Users cannot change them (the add-on manager reverts edits), so their wiring is not the user's problem.
+    """
+    m = meta(obj)
+    labels, annotations = m.get("labels") or {}, m.get("annotations") or {}
+    return ("addonmanager.kubernetes.io/mode" in labels or "components.gke.io/layer" in annotations
+            or labels.get("kubernetes.azure.com/managedby") == "aks" or "eks.amazonaws.com/component" in labels)
+
+
 def name_of(obj: dict[str, Any]) -> str:
     return meta(obj).get("name", "")
 

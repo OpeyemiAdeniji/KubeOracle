@@ -46,7 +46,7 @@ def check(
 
     def wrap(fn: CheckFn) -> CheckFn:
         REGISTRY[id] = CheckInfo(id, title, category, severity, live_only,
-                                 description or (fn.__doc__ or "").strip(), fn, risk)
+                                 description or " ".join((fn.__doc__ or "").split()), fn, risk)
         return fn
 
     return wrap

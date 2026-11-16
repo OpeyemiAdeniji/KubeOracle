@@ -112,3 +112,35 @@ def test_secret_values_never_kept(snap):
     assert "c2VjcmV0" not in text  # tls.key value
     assert "BEGIN CERTIFICATE" not in text
     assert all("data" not in s for s in snap.all("secrets"))
+
+
+def test_gke_managed_and_scaled_to_zero_services_are_quiet(snap, settings):
+    """A fresh GKE cluster raised three false alarms from Google Managed Prometheus (gmp-system)."""
+    from fixtures import container, m
+
+    addon = {"addonmanager.kubernetes.io/mode": "Reconcile"}
+    gke = {"components.gke.io/layer": "addon"}
+    ns = "gmp-system"
+    snap.objects["services"] += [
+        # a workload kept at 0 replicas: no endpoints is expected (user-owned, so only the replica rule applies)
+        {"kind": "Service", "metadata": m("alertmanager", ns=ns),
+         "spec": {"selector": {"app": "alertmanager"}, "ports": [{"port": 9093}]}},
+        # provider add-ons the user cannot edit: no workload at all, and a leftover named port
+        {"kind": "Service", "metadata": m("rule-evaluator", ns=ns, labels=addon, annotations=gke),
+         "spec": {"selector": {"app": "rule-evaluator"}, "ports": [{"port": 19092}]}},
+        {"kind": "Service", "metadata": m("gmp-operator", ns=ns, labels=addon),
+         "spec": {"selector": {"app": "gmp-operator"}, "ports": [{"name": "legacy", "port": 8443, "targetPort": "webhook"}]}},
+    ]
+    snap.objects["statefulsets"] = snap.objects.get("statefulsets", []) + [
+        {"kind": "StatefulSet", "metadata": m("alertmanager", ns=ns), "spec": {"replicas": 0, "template": {
+            "metadata": {"labels": {"app": "alertmanager"}}, "spec": {"containers": [container()]}}}}]
+    snap.objects["pods"] += [
+        {"kind": "Pod", "metadata": m("gmp-operator-1", ns=ns, labels={"app": "gmp-operator"}),
+         "spec": {"containers": [container(ports=[{"name": "web", "containerPort": 10250}])]},
+         "status": {"phase": "Running", "conditions": [{"type": "Ready", "status": "True"}]}}]
+
+    found = by_check(run_checks(snap, settings))
+    noisy = [f.resource.name for c in ("service-no-endpoints", "service-port-mismatch")
+             for f in found.get(c, []) if f.resource.namespace == ns]
+    assert noisy == []
+    assert [f.resource.name for f in found["service-no-endpoints"]] == ["web"]  # the real typo still fires
