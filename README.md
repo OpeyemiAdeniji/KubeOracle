@@ -116,7 +116,7 @@ helm install kubesift oci://ghcr.io/opeyemiadeniji/charts/kubesift -n kubesift -
 | `kubesift drill start crashloop` | **Practise:** break a drill namespace on purpose to train on-call |
 | `kubesift knowledge export` / `import` | Share what fixed past incidents between teams and clusters |
 | `kubesift fix rollback deployment/checkout -n shop` | Guarded fix: plan → server-side dry run → confirm → audit log |
-| `kubesift snapshot save` | Redacted snapshot to analyse later with `--from` or attach to a ticket |
+| `kubesift snapshot save` | Redacted snapshot to analyse later with `--from` (judged as of when it was taken) or attach to a ticket |
 | `kubesift note add pod-oomkilled "Raised to 1Gi; leak fixed in 3.3"` | Team memory, shown next to matching findings |
 | `kubesift history` | Past investigations |
 | `kubesift serve` | Web dashboard and REST API |

@@ -46,6 +46,42 @@ jobs:
           bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7
           ./actionlint -color
 
+  action:
+    # Runs the published GitHub Action (action.yml) the way users do, so a broken action is caught before release.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write  # SARIF upload, as users run it
+    steps:
+      - uses: actions/checkout@v7
+      - name: A healthy chart passes
+        uses: ./
+        with:
+          paths: deploy/helm/kubesift
+          target-version: "1.36"
+          fail-on: medium
+          sarif: "false"
+      - name: Broken manifests fail the step
+        id: broken
+        continue-on-error: true
+        uses: ./
+        with:
+          paths: test-scenarios/01-crashloop-missing-env.yaml test-scenarios/09-netpol-blocks-dns.yaml  # 09 is high
+          fail-on: high
+          sarif: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
+      - name: Check the outcome and the SARIF report
+        env:
+          OUTCOME: ${{ steps.broken.outcome }}
+          SARIF: ${{ steps.broken.outputs.sarif-file }}
+        run: |
+          test "$OUTCOME" = failure || { echo "broken manifests should fail the step, got $OUTCOME"; exit 1; }
+          python3 - "$SARIF" <<'EOF'
+          import json, sys
+          results = json.load(open(sys.argv[1]))["runs"][0]["results"]
+          assert results, "the SARIF report has no results"
+          print(len(results), "results; rules:", sorted({r["ruleId"] for r in results}))
+          EOF
+
   oldest-deps:
     # The Kubernetes client changed its low-level API in v37; keep supporting older releases.
     runs-on: ubuntu-latest
