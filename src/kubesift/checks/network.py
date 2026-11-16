@@ -8,7 +8,15 @@ from typing import Any
 
 from kubesift.checks.base import Context, check
 from kubesift.models import Category, Finding, ResourceRef, Severity
-from kubesift.util import age, containers_of, human_duration, label_selector_matches, meta, selector_matches
+from kubesift.util import (
+    age,
+    containers_of,
+    human_duration,
+    label_selector_matches,
+    meta,
+    provider_managed,
+    selector_matches,
+)
 
 
 def _pods_for(ctx: Context, ns: str | None, selector: dict[str, str]) -> list[dict[str, Any]]:
@@ -37,12 +45,16 @@ def _ready_endpoints(ctx: Context, svc: dict[str, Any]) -> int | None:
 
 @check("service-no-endpoints", "Service has no ready backends", Category.NETWORK, Severity.HIGH)
 def service_no_endpoints(ctx: Context) -> Iterator[Finding]:
-    """Traffic to the Service fails: its selector matches no ready pods."""
+    """Traffic to the Service fails: its selector matches no ready pods.
+
+    Not raised for a workload scaled to 0 replicas on purpose, or for Services the cloud provider's add-on
+    manager owns (GKE, AKS, EKS add-ons), which users cannot edit; failing pods behind them are still reported.
+    """
     for svc in ctx.snap.all("services"):
         spec = svc.get("spec") or {}
         selector = spec.get("selector")
-        if not selector or spec.get("type") == "ExternalName":
-            continue
+        if not selector or spec.get("type") == "ExternalName" or provider_managed(svc):
+            continue  # pod failures behind a provider-managed Service are still reported by the pod checks
         if (a := age(meta(svc).get("creationTimestamp"))) is not None and a < timedelta(minutes=2):
             continue
         ns, name = meta(svc).get("namespace"), meta(svc).get("name", "")
@@ -53,6 +65,10 @@ def service_no_endpoints(ctx: Context) -> Iterator[Finding]:
         if ready_eps > 0:
             continue
         sel = ",".join(f"{k}={v}" for k, v in selector.items())
+        owners = [w for w in ctx.snap.workloads() if meta(w).get("namespace") == ns and selector_matches(
+            selector, ((((w.get("spec") or {}).get("template") or {}).get("metadata") or {}).get("labels")))]
+        if not pods and owners and all((w.get("spec") or {}).get("replicas") == 0 for w in owners):
+            continue  # scaled to zero on purpose: no endpoints is expected
         if not pods:
             near = _closest_labels(ctx, ns, selector)
             msg = f"Selector {sel} matches no pods in {ns}, so the Service has no endpoints."
@@ -89,10 +105,13 @@ def _closest_labels(ctx: Context, ns: str | None, selector: dict[str, str]) -> s
 @check("service-port-mismatch", "Service targetPort does not match any container port", Category.NETWORK,
        Severity.HIGH, live_only=False)
 def service_port_mismatch(ctx: Context) -> Iterator[Finding]:
-    """targetPort refers to a named or numbered port the selected pods do not expose."""
+    """targetPort refers to a named or numbered port the selected pods do not expose.
+
+    Not raised for Services the cloud provider's add-on manager owns.
+    """
     for svc in ctx.snap.all("services"):
         selector = (svc.get("spec") or {}).get("selector")
-        if not selector:
+        if not selector or provider_managed(svc):
             continue
         ns = meta(svc).get("namespace")
         specs = [p.get("spec") or {} for p in _pods_for(ctx, ns, selector)] if ctx.snap.live else []

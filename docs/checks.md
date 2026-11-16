@@ -140,13 +140,13 @@ An egress NetworkPolicy selects pods but does not allow port 53, so name lookups
 
 **Service has no ready backends** · high · problem
 
-Traffic to the Service fails: its selector matches no ready pods.
+Traffic to the Service fails: its selector matches no ready pods. Not raised for a workload scaled to 0 replicas on purpose, or for Services the cloud provider's add-on manager owns (GKE, AKS, EKS add-ons), which users cannot edit; failing pods behind them are still reported.
 
 ### service-port-mismatch
 
 **Service targetPort does not match any container port** · high · problem · lint
 
-targetPort refers to a named or numbered port the selected pods do not expose.
+targetPort refers to a named or numbered port the selected pods do not expose. Not raised for Services the cloud provider's add-on manager owns.
 
 ## Platform
 
@@ -154,8 +154,7 @@ targetPort refers to a named or numbered port the selected pods do not expose.
 
 **Extension API is unavailable** · high · problem
 
-An aggregated APIService (metrics-server, custom metrics, ...) is down: it breaks HPAs, `kubectl top`,
-    API discovery and namespace deletion.
+An aggregated APIService (metrics-server, custom metrics, ...) is down: it breaks HPAs, `kubectl top`, API discovery and namespace deletion.
 
 ### dns-fragile
 
@@ -345,8 +344,7 @@ Several replicas but every pod is on the same node (or zone): one failure takes 
 
 **Rollouts can drop live traffic (502s)** · medium · risk · lint
 
-Pods behind a Service with no preStop delay stop before load balancers stop routing to them,
-    so every deploy returns 502s / connection resets for a few seconds.
+Pods behind a Service with no preStop delay stop before load balancers stop routing to them, so every deploy returns 502s / connection resets for a few seconds.
 
 ## Security
 
