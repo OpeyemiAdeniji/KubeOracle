@@ -30,7 +30,9 @@ Inside a pod, KubeSift uses the service account automatically. It needs **read**
 Before reading anything KubeSift checks that the cluster answers and accepts the login, and stops with an error
 (exit code 1) when it doesn't, instead of producing an empty report that looks healthy. The message names the
 context and the cause: unreachable API server, login rejected (expired, revoked or deleted account), or a
-failing login helper such as `gke-gcloud-auth-plugin`. `kubesift doctor` runs the same check.
+failing login helper such as `gke-gcloud-auth-plugin`. `kubesift doctor` runs the same check. Kubeconfig
+problems are named too: no kubeconfig file, a kubeconfig with no clusters, no current context, or a `--context`
+that does not exist (with the contexts that do).
 
 ## LLM
 

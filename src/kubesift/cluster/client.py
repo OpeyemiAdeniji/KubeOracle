@@ -26,6 +26,52 @@ class ClusterAccessError(Exception):
 
 _LOGIN_HINT = ("log in again (gcloud auth login / az login / aws sso login, or refresh the kubeconfig), "
                "or pick another context: kubectl config get-contexts, then --context NAME")
+CONNECT_HINT = ("connect a cluster first, for example: gcloud container clusters get-credentials NAME --region REGION, "
+                 "az aks get-credentials -g GROUP -n NAME, aws eks update-kubeconfig --name NAME, or kind create cluster; "
+                 "or point KUBECONFIG / --kubeconfig at another file")
+
+
+def _read_kubeconfig(kubeconfig: str | None) -> tuple[str, list[dict[str, Any]], str]:
+    """Read the kubeconfig file(s) as plain YAML: (where, contexts, current-context).
+
+    Raises FileNotFoundError when no file exists; YAML errors propagate.
+    """
+    import yaml
+
+    raw = [kubeconfig] if kubeconfig else os.environ.get("KUBECONFIG", "~/.kube/config").split(os.pathsep)
+    paths = [os.path.expanduser(p) for p in raw if p]
+    where = ", ".join(paths)
+    existing = [p for p in paths if os.path.isfile(p)]
+    if not existing:
+        raise FileNotFoundError(where)
+    contexts: list[dict[str, Any]] = []
+    current = ""
+    for p in existing:
+        with open(p, encoding="utf-8") as fh:
+            data = yaml.safe_load(fh) or {}
+        contexts += [c for c in data.get("contexts") or [] if isinstance(c, dict) and c.get("name")]
+        current = current or data.get("current-context") or ""
+    return where, contexts, current
+
+
+def _explain_load_error(exc: Exception, kubeconfig: str | None, context: str | None) -> str:
+    """Turn the Kubernetes client's terse kubeconfig errors into what is wrong and how to fix it."""
+    try:
+        where, contexts, current = _read_kubeconfig(kubeconfig)
+    except FileNotFoundError as missing:
+        return f"no kubeconfig found at {missing}. Fix: {CONNECT_HINT}"
+    except Exception:
+        return f"cannot load kubeconfig: {exc}"
+    names = [c["name"] for c in contexts]
+    if not names:
+        return f"the kubeconfig at {where} has no clusters set up. Fix: {CONNECT_HINT}"
+    available = ", ".join(names[:10])
+    if context and context not in names:
+        return f"context '{context}' is not in the kubeconfig at {where}. Available: {available}"
+    if not context and current not in names:
+        return (f"no current context is set in {where}. Pick one with --context NAME or "
+                f"kubectl config use-context NAME. Available: {available}")
+    return f"cannot load kubeconfig{f' context {context}' if context else ''}: {exc}"
 
 
 class _LoginFailures(logging.Handler):
@@ -54,8 +100,8 @@ class KubeClient:
             logging.getLogger().addHandler(failures)  # the client only *logs* a failing exec login helper
             try:
                 config.load_kube_config(config_file=kubeconfig, context=context, client_configuration=cfg)
-            except Exception as exc:  # missing file, unknown context
-                raise ClusterAccessError(f"cannot load kubeconfig{f' context {context}' if context else ''}: {exc}") from exc
+            except Exception as exc:  # missing or empty file, unknown or unset context
+                raise ClusterAccessError(_explain_load_error(exc, kubeconfig, context)) from exc
             finally:
                 logging.getLogger().removeHandler(failures)
             if context:
@@ -204,7 +250,15 @@ def list_contexts(kubeconfig: str | None = None) -> tuple[list[dict[str, str]], 
         os.path.expanduser("~/.kube/config")
     ):
         return [{"name": "in-cluster", "cluster": "in-cluster", "namespace": ""}], "in-cluster"
-    contexts, active = config.list_kube_config_contexts(config_file=kubeconfig)
+    try:
+        contexts, active = config.list_kube_config_contexts(config_file=kubeconfig)
+    except Exception as exc:
+        # The client refuses a kubeconfig with no contexts or no current context; both are fine to list.
+        try:
+            _, contexts, current = _read_kubeconfig(kubeconfig)
+        except Exception:
+            raise ClusterAccessError(_explain_load_error(exc, kubeconfig, None)) from exc
+        active = next((c for c in contexts if c["name"] == current), None)
     out = [
         {
             "name": c["name"],

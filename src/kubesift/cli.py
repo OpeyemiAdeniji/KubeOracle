@@ -513,12 +513,18 @@ def list_checks(output: str = OUT) -> None:
 @app.command()
 def contexts() -> None:
     """List kubeconfig contexts."""
-    from kubesift.cluster.client import list_contexts
+    from kubesift.cluster.client import CONNECT_HINT, ClusterAccessError, list_contexts
 
     try:
         items, current = list_contexts(state.settings.kubeconfig)
+    except ClusterAccessError as exc:
+        _fail(str(exc))
     except Exception as exc:
         _fail(f"cannot read kubeconfig: {exc}")
+    if not items:
+        console.print(f"No contexts in the kubeconfig. To add one, {CONNECT_HINT}.")
+    elif not current:
+        console.print("No current context: pick one with --context NAME or kubectl config use-context NAME.")
     for c in items:
         mark = "*" if c["name"] == current else " "
         console.print(f"{mark} {c['name']}  (cluster {c['cluster']})")
