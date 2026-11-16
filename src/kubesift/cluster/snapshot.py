@@ -67,6 +67,9 @@ KINDS: list[tuple[str, str, str, str, bool, bool]] = [
 ]
 KIND_TO_KEY = {kind: key for key, kind, *_ in KINDS}
 CLUSTER_SCOPED = {key for key, _, _, _, namespaced, _ in KINDS if not namespaced}
+# Read from every namespace even when one namespace is scanned: Argo CD Applications live in the argocd namespace
+# but deploy into others, so a scan of `shop` must still see the app that syncs into it.
+ALL_NAMESPACES = {"argoapps"}
 _LAST_APPLIED = "kubectl.kubernetes.io/last-applied-configuration"
 APPLIED_API = "kubesift.dev/applied-api-version"
 SOURCE = "kubesift.dev/source"
@@ -242,12 +245,15 @@ def collect(
         key, kind, prefix, plural, namespaced, optional = entry
         if kinds is not None and key not in kinds:
             return
-        if namespace and namespaced:
-            path = f"{prefix}/namespaces/{namespace}/{plural}"
-        else:
-            path = f"{prefix}/{plural}"
+        scoped = f"{prefix}/namespaces/{namespace}/{plural}"
+        path = scoped if namespace and namespaced and key not in ALL_NAMESPACES else f"{prefix}/{plural}"
         try:
-            items, truncated = client.list_all(path, max_items=max_items)
+            try:
+                items, truncated = client.list_all(path, max_items=max_items)
+            except KubeError as exc:
+                if not (exc.status == 403 and namespace and key in ALL_NAMESPACES):
+                    raise
+                items, truncated = client.list_all(scoped, max_items=max_items)  # no cluster-wide access: own ns only
         except KubeError as exc:
             if exc.status == 404:
                 return

@@ -29,7 +29,8 @@ profile (**Packages**) and set their visibility to **Public**, so people can pul
 ## Cutting a release
 
 1. Update the version in `src/kubesift/__init__.py` and `deploy/helm/kubesift/Chart.yaml` (`version`, `appVersion`
-   and the image tag in the `artifacthub.io/images` annotation; `tests/test_release.py` checks they match).
+   and the image tag in the `artifacthub.io/images` annotation; `tests/test_release.py` checks they match), and
+   replace the `artifacthub.io/changes` annotation with what changed in this version (Artifact Hub shows it).
 2. Merge to `main`, then tag. The workflow refuses a tag that doesn't match the package version.
    Optionally run the **AI eval** workflow (Actions tab) first if the prompt or LLM code changed; it needs a
    provider API key as a repository secret.
