@@ -8,6 +8,7 @@ from datetime import timedelta
 from typing import Any
 
 from kubesift.checks.base import Context, check
+from kubesift.denials import classify_denial
 from kubesift.models import Category, Finding, Severity
 from kubesift.util import age, containers_of, fmt_bytes, human_duration, meta, parse_quantity, parse_time
 
@@ -25,9 +26,6 @@ EXIT_CODES = {
 }
 
 LOG_HINTS: list[tuple[re.Pattern[str], str]] = [
-    (re.compile(r'is forbidden: User "system:serviceaccount:[^"]+"', re.I),
-     "The app calls the Kubernetes API and its ServiceAccount is not allowed to: add a Role/RoleBinding for the "
-     "verb and resource named in the log line."),
     (re.compile(r"exec format error", re.I),
      "The image was built for a different CPU architecture (e.g. arm64 image on amd64 nodes). "
      "Rebuild with `docker buildx build --platform linux/amd64,linux/arm64`."),
@@ -72,6 +70,9 @@ def log_hints(ctx: Context, ns: str, pod: str, container: str) -> tuple[list[str
             hints.append(template.format(group or "(name not found in logs)"))
         else:
             hints.append(template.format(f" ({group})" if group else ""))
+    if denial := classify_denial(text):  # RBAC only when the message proves it; other refusals named for what they are
+        hints.append(denial.explanation + " " + denial.remediation
+                     + (f" Check: `{denial.commands[0]}`" if denial.commands else ""))
     label = "previous run" if entry.get("previous") else "current run"
     evidence = [f"log ({label}): {ln}" for ln in lines[-5:]]
     return hints, evidence
@@ -369,6 +370,33 @@ def not_ready(ctx: Context) -> Iterator[Finding]:
             since=parse_time(ready.get("lastTransitionTime")),
             node=(pod.get("spec") or {}).get("nodeName"),
         )
+
+
+@check("pod-access-denied", "App is refused access (RBAC, cloud IAM, policy or another service)", Category.CONFIG,
+       Severity.HIGH)
+def access_denied(ctx: Context) -> Iterator[Finding]:
+    """A container that is not crashing (running but unready, or restarting) logs a refusal. The cause is named from
+    the message: Kubernetes RBAC only when it says so, otherwise cloud IAM, an admission policy, a quota or
+    LimitRange, a terminating namespace, or a 403 from another service. Crash loops get the same explanation in
+    pod-crashloop."""
+    for pod in ctx.snap.all("pods"):
+        ns, pname = meta(pod).get("namespace"), meta(pod).get("name", "")
+        for cs, _ in _statuses(pod):
+            name = cs.get("name", "")
+            entry = ctx.snap.logs.get(f"{ns}/{pname}/{name}")
+            if not entry or is_crash_looping(cs):
+                continue
+            denial = classify_denial("\n".join(entry.get("errors") or entry.get("tail") or []))
+            if not denial:
+                continue
+            yield ctx.finding(
+                "pod-access-denied", pod,
+                f"Container '{name}' is being refused: {denial.explanation}",
+                evidence=[f"log: {denial.line}"],
+                remediation=denial.remediation,
+                commands=[*denial.commands, f"kubectl logs {pname} -n {ns} -c {name} --tail=50"],
+                node=(pod.get("spec") or {}).get("nodeName"),
+            )
 
 
 @check("pod-restarting", "Container restarts often", Category.WORKLOAD, Severity.MEDIUM)

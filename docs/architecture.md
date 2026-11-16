@@ -5,7 +5,7 @@
  CLI / kubectl plugin   REST API + dashboard   MCP server   GitHub Action / pre-commit
             └───────────────┬────────────────┘
                             ▼
-   collect ─► Snapshot ─► checks (71) ─► changes ─► correlate ─► explain ─► Report
+   collect ─► Snapshot ─► checks (72) ─► changes ─► correlate ─► explain ─► Report
    (k8s API,   (redacted,   deterministic   rollouts,   incidents,   rules or LLM
     logs,       JSON-able)   findings with   config,    likely       (validated against
     metrics)                 evidence        Helm, Argo  trigger      the evidence)

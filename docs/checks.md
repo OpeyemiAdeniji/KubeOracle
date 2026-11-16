@@ -1,6 +1,6 @@
 # Checks
 
-KubeSift runs 71 checks. **Problems** are broken now; **risks** will hurt later. Checks marked *lint* also run on manifest files (`kubesift lint`), without a cluster.
+KubeSift runs 72 checks. **Problems** are broken now; **risks** will hurt later. Checks marked *lint* also run on manifest files (`kubesift lint`), without a cluster.
 
 Regenerate this page with `python scripts/gen_check_docs.py`.
 
@@ -97,6 +97,12 @@ A ConfigMap/Secret used through env vars changed after the pod started; env vars
 **imagePullSecret does not exist** · high · problem
 
 The pod lists an imagePullSecret that is not in its namespace.
+
+### pod-access-denied
+
+**App is refused access (RBAC, cloud IAM, policy or another service)** · high · problem
+
+A container that is not crashing (running but unready, or restarting) logs a refusal. The cause is named from the message: Kubernetes RBAC only when it says so, otherwise cloud IAM, an admission policy, a quota or LimitRange, a terminating namespace, or a 403 from another service. Crash loops get the same explanation in pod-crashloop.
 
 ### pod-config-error
 

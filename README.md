@@ -8,7 +8,7 @@
 
 [Website](https://opeyemiadeniji.github.io/KubeSift/) · [Quick start](#quick-start) · [Docs](docs/) · [Production guide](docs/production.md)
 
-KubeSift reads your cluster, runs 71 deterministic checks, links each failure to the change that most likely
+KubeSift reads your cluster, runs 72 deterministic checks, links each failure to the change that most likely
 caused it (a rollout, a ConfigMap edit, a Helm upgrade, a node going away) and tells you the fix, with the
 exact commands. An LLM is optional: it ranks and explains the evidence, it never invents it.
 
@@ -77,7 +77,8 @@ dashboards, logs, Git and chat. KubeSift answers the on-call questions directly:
   (including Docker Hub rate limits), pending pods (with the scheduler's real reason), missing ConfigMaps/Secrets,
   Services with no endpoints or the wrong port, dead nodes, unbound volumes, failing Jobs and CronJobs,
   autoscalers that can't scale, broken DNS, NetworkPolicies that block DNS, down admission webhooks that block
-  deploys, pod IP exhaustion, expiring certificates.
+  deploys, pod IP exhaustion, expiring certificates, and apps refused access (Kubernetes RBAC told apart from
+  cloud IAM, admission policies, quotas and LimitRanges, with the exact `kubectl auth can-i` check).
 - **Why, and what changed?** Rollout diffs (image, env, resources, probes), config edits, Helm releases,
   Argo CD syncs, scaling and node events — linked to the problems they caused, with rollback commands.
 - **What will hurt next?** Removed APIs for your next upgrade, PDBs that will hang node drains, retired

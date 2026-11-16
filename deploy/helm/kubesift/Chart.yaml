@@ -29,6 +29,8 @@ annotations:
       url: https://github.com/OpeyemiAdeniji/KubeSift/blob/main/docs/production.md
   # What changed in this version (shown on Artifact Hub). Kinds: added, changed, deprecated, removed, fixed, security.
   artifacthub.io/changes: |
+    - kind: added
+      description: Apps refused access are reported even when they keep running, with Kubernetes RBAC told apart from cloud IAM, policies, quotas, LimitRanges and other services
     - kind: fixed
       description: A saved snapshot analysed later (--from) keeps the ages and deadlines it had when it was taken
     - kind: fixed

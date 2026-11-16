@@ -55,7 +55,7 @@
   const script = [
     { type: "cmd", text: "kubectl sift diagnose -n shop" },
     { type: "out", html: '<span class="t-dim">Reading cluster state… 412 objects · 3 failing containers · logs collected</span>', delay: 500 },
-    { type: "out", html: '<span class="t-dim">Running 71 checks · correlating 9 changes in the last 6h</span>', delay: 450 },
+    { type: "out", html: '<span class="t-dim">Running 72 checks · correlating 9 changes in the last 6h</span>', delay: 450 },
     { type: "out", html: "", delay: 250 },
     { type: "out", html: '<span class="t-mag">╭─ Diagnosis ─────────────────────────────────────────────────────╮</span>', delay: 300 },
     { type: "out", html: '  <span class="t-bold">1. Deployment/shop/checkout: container is crash looping</span>  <span class="t-dim">[85%]</span>', delay: 250 },
