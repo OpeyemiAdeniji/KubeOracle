@@ -1,0 +1,52 @@
+# The app keeps running but its ServiceAccount may not list Secrets, so it never becomes ready.
+# KubeSift should name Kubernetes RBAC (not "a 403") and give the `kubectl auth can-i` command.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: rbac-test
+  namespace: default
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rbac-test
+  namespace: default
+  labels:
+    scenario: rbac-forbidden
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rbac-test
+  template:
+    metadata:
+      labels:
+        app: rbac-test
+    spec:
+      serviceAccountName: rbac-test
+      containers:
+        - name: app
+          image: python:3.12-slim
+          command: ["python", "-u", "-c"]
+          args:
+            - |
+              import json, ssl, time, urllib.error, urllib.request
+              sa = "/var/run/secrets/kubernetes.io/serviceaccount"
+              token = open(sa + "/token").read()
+              ctx = ssl.create_default_context(cafile=sa + "/ca.crt")
+              url = "https://kubernetes.default.svc/api/v1/namespaces/default/secrets"
+              while True:
+                  try:
+                      urllib.request.urlopen(urllib.request.Request(url, headers={"Authorization": "Bearer " + token}), context=ctx)
+                      open("/tmp/ready", "w").close()
+                  except urllib.error.HTTPError as e:
+                      print("ERROR loading config:", json.loads(e.read())["message"], flush=True)
+                  time.sleep(10)
+          readinessProbe:
+            exec:
+              command: ["test", "-f", "/tmp/ready"]
+            periodSeconds: 5
+          resources:
+            limits:
+              memory: "64Mi"
+              cpu: "100m"

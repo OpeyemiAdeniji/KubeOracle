@@ -9,8 +9,21 @@ from typing import Any
 UTC = timezone.utc
 
 
+_as_of: datetime | None = None
+
+
 def now() -> datetime:
-    return datetime.now(UTC)
+    """The current time, or the moment a saved snapshot was taken while one is being analysed."""
+    return _as_of or datetime.now(UTC)
+
+
+def analyse_as_of(moment: datetime | None) -> None:
+    """Measure ages and deadlines from `moment` (a saved snapshot's collection time); None restores the clock.
+
+    A plain module setting, not a context variable, so the thread pools that run checks see it too.
+    """
+    global _as_of
+    _as_of = moment
 
 
 def parse_time(value: str | None) -> datetime | None:

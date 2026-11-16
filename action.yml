@@ -16,23 +16,40 @@ inputs:
   sarif:
     description: Upload results to GitHub code scanning (needs security-events write permission)
     default: "true"
+outputs:
+  sarif-file:
+    description: Path of the SARIF report, written even when the step fails
+    value: ${{ steps.lint.outputs.sarif-file }}
 runs:
   using: composite
   steps:
     - uses: actions/setup-python@v7
       with:
         python-version: "3.12"
+    # Install KubeSift from the action's own checkout, so `@v2`, `@v2.1.4` or `@<sha>` run exactly that version
+    # (and `uses: ./` in this repository tests the code in the pull request).
     - shell: bash
-      run: pip install --quiet "kubesift @ git+https://github.com/OpeyemiAdeniji/KubeSift@${{ github.action_ref || 'main' }}"
+      run: pip install --quiet "$ACTION_PATH"
+      env:
+        ACTION_PATH: ${{ github.action_path }}
     - id: lint
       shell: bash
+      env:  # inputs reach the script as data, never as shell code
+        PATHS: ${{ inputs.paths }}
+        TARGET: ${{ inputs.target-version }}
+        FAIL_ON: ${{ inputs.fail-on }}
       run: |
+        set -f  # paths are split on spaces but never glob-expanded
         args=()
-        if [ -n "${{ inputs.target-version }}" ]; then args+=(--target-version "${{ inputs.target-version }}"); fi
-        kubesift lint ${{ inputs.paths }} "${args[@]}" -o sarif --fail-on none > kubesift.sarif
-        kubesift lint ${{ inputs.paths }} "${args[@]}" --fail-on "${{ inputs.fail-on }}"
-    - if: always() && inputs.sarif == 'true'
+        if [ -n "$TARGET" ]; then args+=(--target-version "$TARGET"); fi
+        sarif="$GITHUB_WORKSPACE/kubesift.sarif"  # same place as before, for workflows that read it
+        echo "sarif-file=$sarif" >> "$GITHUB_OUTPUT"
+        # shellcheck disable=SC2086
+        kubesift lint $PATHS "${args[@]}" -o sarif --fail-on none > "$sarif"
+        # shellcheck disable=SC2086
+        kubesift lint $PATHS "${args[@]}" --fail-on "$FAIL_ON"
+    - if: always() && inputs.sarif == 'true' && steps.lint.outputs.sarif-file != ''
       uses: github/codeql-action/upload-sarif@v4
       with:
-        sarif_file: kubesift.sarif
+        sarif_file: ${{ steps.lint.outputs.sarif-file }}
         category: kubesift

@@ -91,9 +91,14 @@ def _llm_status(text: str, use_llm: bool) -> str:
 def _snapshot(namespace: str | None, from_file: str | None = None, with_logs: bool = True):
 
     if from_file:
+        from kubesift.util import analyse_as_of
+
         snap = _load_snapshot_file(from_file)
         if namespace:
             snap.namespace = namespace
+        # "Pending for 3m" must stay 3m when the file is read days later, and a certificate with 3 days left must
+        # not show as expired: judge the snapshot as of the moment it was taken.
+        analyse_as_of(snap.collected_at)
         return snap
     from kubesift.analysis.engine import snapshot_for
 

@@ -22,6 +22,18 @@ PATTERNS: list[tuple[str, re.Pattern[str], str, Severity, str]] = [
      Severity.HIGH,
      "Set the securityContext fields named in the message (runAsNonRoot, drop ALL capabilities, seccompProfile) "
      "or change the namespace's pod-security label."),
+    ("policy-denied", re.compile(r"admission webhook \"?([\w.-]+)\"? denied the request", re.I),
+     "Admission policy {0} denies the change (a policy such as Kyverno or Gatekeeper, not RBAC).",
+     Severity.HIGH,
+     "Read the reason after 'denied the request' and change the manifest to meet the policy, or ask the policy "
+     "owner for an exception."),
+    ("limit-range", re.compile(r"(?:maximum|minimum) (cpu|memory|ephemeral-storage) usage per (?:Container|Pod) is", re.I),
+     "A LimitRange refuses pods whose {0} is outside its bounds, so the controller cannot create them.",
+     Severity.HIGH, "Set requests and limits inside the LimitRange (`kubectl describe limitrange -n <namespace>`) "
+                    "or change the LimitRange."),
+    ("ns-terminating", re.compile(r"(?:namespace )?([\w-]+)? ?because it is being terminated", re.I),
+     "The namespace is being deleted, so nothing new can be created in it.",
+     Severity.HIGH, "Wait for the deletion to finish (see namespace-stuck-terminating) or deploy to another namespace."),
     ("quota", re.compile(r"exceeded quota: ([\w.-]+)", re.I),
      "ResourceQuota {0} is exhausted, so new pods are rejected.",
      Severity.HIGH, "Raise the quota or lower requests/replicas in that namespace."),
@@ -70,7 +82,8 @@ def platform_warnings(ctx: Context) -> Iterator[Finding]:
             title={"webhook": "Admission webhook is failing", "pod-security": "Pod Security Admission rejects pods",
                    "quota": "ResourceQuota exhausted", "ip-exhaustion": "Pod IP addresses exhausted",
                    "sandbox": "Pod sandbox creation failing", "certificate": "Expired certificate",
-                   "cron-missed": "CronJob stopped scheduling"}[key],
+                   "cron-missed": "CronJob stopped scheduling", "policy-denied": "Admission policy denies changes",
+                   "limit-range": "LimitRange rejects pods", "ns-terminating": "Namespace is being deleted"}[key],
             evidence=[f"{count} event(s), latest: {events[0].get('message', '')[:300]}"],
             remediation=fix,
             since=parse_time(event_time(events[-1])),

@@ -2,8 +2,8 @@ apiVersion: v2
 name: kubesift
 description: Evidence-based Kubernetes troubleshooting service (dashboard, API, Alertmanager receiver, background scans)
 type: application
-version: 2.1.4
-appVersion: "2.1.4"
+version: 2.1.5
+appVersion: "2.1.5"
 home: https://opeyemiadeniji.github.io/KubeSift/
 sources:
   - https://github.com/OpeyemiAdeniji/KubeSift
@@ -19,7 +19,7 @@ annotations:
   artifacthub.io/category: monitoring-logging
   artifacthub.io/images: |
     - name: kubesift
-      image: ghcr.io/opeyemiadeniji/kubesift:2.1.4
+      image: ghcr.io/opeyemiadeniji/kubesift:2.1.5
   artifacthub.io/links: |
     - name: Website
       url: https://opeyemiadeniji.github.io/KubeSift/
@@ -29,7 +29,11 @@ annotations:
       url: https://github.com/OpeyemiAdeniji/KubeSift/blob/main/docs/production.md
   # What changed in this version (shown on Artifact Hub). Kinds: added, changed, deprecated, removed, fixed, security.
   artifacthub.io/changes: |
-    - kind: fixed
-      description: Argo CD syncs are found when one namespace is scanned and linked to failures in the workloads they manage
     - kind: added
-      description: values.schema.json validates chart values and rejects typos such as replicaCounts
+      description: Apps refused access are reported even when they keep running, with Kubernetes RBAC told apart from cloud IAM, policies, quotas, LimitRanges and other services
+    - kind: fixed
+      description: A saved snapshot analysed later (--from) keeps the ages and deadlines it had when it was taken
+    - kind: fixed
+      description: The GitHub Action installs the exact version it is pinned to and passes inputs to the shell as data
+    - kind: added
+      description: The GitHub Action exposes the SARIF report path as the sarif-file output

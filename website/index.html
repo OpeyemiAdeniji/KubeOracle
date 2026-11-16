@@ -6,7 +6,7 @@
 <title>KubeSift — know why Kubernetes broke, not just that it broke</title>
 <meta name="description" content="Open-source Kubernetes troubleshooting. KubeSift finds what's broken, links it to the change that caused it, and gives you the fix — from your terminal, your AI assistant, CI, or a dashboard in your cluster.">
 <meta property="og:title" content="KubeSift — know why Kubernetes broke">
-<meta property="og:description" content="71 evidence-based checks, change correlation and rollback commands. CLI, kubectl plugin, MCP server and Helm chart. Free and open source.">
+<meta property="og:description" content="72 evidence-based checks, change correlation and rollback commands. CLI, kubectl plugin, MCP server and Helm chart. Free and open source.">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary">
 <meta name="theme-color" content="#0b1020">
@@ -115,7 +115,7 @@ $ kubectl rollout undo deployment/checkout -n shop --to-revision=1</pre>
 <!-- STATS -->
 <section class="wrap stats" aria-label="Key numbers">
   <div class="stat"><b data-count="79">0</b><span>% of production incidents follow a change<a class="cite" href="https://komodor.com/blog/komodor-2025-enterprise-kubernetes-report-finds-nearly-80-of-production-outages/" title="Komodor 2025 Enterprise Kubernetes Report">¹</a></span></div>
-  <div class="stat"><b data-count="71">0</b><span>evidence-based checks, from crash loops to retired ingress controllers</span></div>
+  <div class="stat"><b data-count="72">0</b><span>evidence-based checks, from crash loops to retired ingress controllers</span></div>
   <div class="stat"><b>~3s</b><span>to analyse a 5,000-pod cluster once it is read</span></div>
   <div class="stat"><b>0</b><span>Secret values kept — only key names and certificate dates</span></div>
 </section>
@@ -202,7 +202,7 @@ $ kubectl rollout undo deployment/checkout -n shop --to-revision=1</pre>
       <article class="step reveal">
         <span class="step-n">02</span>
         <h3>Prove what's wrong</h3>
-        <p>71 deterministic checks turn raw state into findings with evidence copied from the cluster — exit codes,
+        <p>72 deterministic checks turn raw state into findings with evidence copied from the cluster — exit codes,
           scheduler reasons, missing keys, the log line that names the missing env var.</p>
       </article>
       <article class="step reveal">
@@ -339,7 +339,7 @@ https://kubesift.your-co.com/mcp</code></pre>
 <section class="section alt" id="catches">
   <div class="wrap">
     <p class="eyebrow">What it catches</p>
-    <h2>71 checks built from real incidents.</h2>
+    <h2>72 checks built from real incidents.</h2>
     <p class="sub">Each one says what is wrong in plain words, shows the evidence, and gives the fix.</p>
     <div class="catch-grid">
       <article class="catch reveal"><h3>Workloads</h3><p>Crash loops explained by exit code and logs, OOM kills with a suggested limit, rollouts past their deadline, failing Jobs and CronJobs.</p></article>
@@ -349,9 +349,9 @@ https://kubesift.your-co.com/mcp</code></pre>
       <article class="catch reveal"><h3>Platform</h3><p>Admission webhooks that block every deploy, pod IP exhaustion, Pod Security rejections, expired certificates, CoreDNS down.</p></article>
       <article class="catch reveal"><h3>Upgrades</h3><p>Removed APIs in manifests and Helm releases, PDBs that hang node drains, retired ingress-nginx, containerd 1.x, cgroup v1, kubelet skew.</p></article>
       <article class="catch reveal"><h3>Cost</h3><p>Over-requested CPU and memory with right-sizing from real usage, idle GPUs, unused volumes, load balancers with no backends.</p></article>
-      <article class="catch reveal"><h3>Security &amp; reliability</h3><p>Privileged containers, secrets in plain env vars, cluster-admin service accounts, single replicas, missing probes and limits.</p></article>
+      <article class="catch reveal"><h3>Security &amp; reliability</h3><p>Apps refused access, with Kubernetes RBAC told apart from cloud IAM, admission policies and quotas. Privileged containers, secrets in plain env vars, cluster-admin service accounts, single replicas, missing probes and limits.</p></article>
     </div>
-    <p class="center more"><a class="link" href="https://github.com/OpeyemiAdeniji/KubeSift/blob/main/docs/checks.md">See all 71 checks →</a></p>
+    <p class="center more"><a class="link" href="https://github.com/OpeyemiAdeniji/KubeSift/blob/main/docs/checks.md">See all 72 checks →</a></p>
   </div>
 </section>
 

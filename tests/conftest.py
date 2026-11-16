@@ -26,3 +26,11 @@ def snapshot_file(tmp_path, snap):
     path = tmp_path / "snap.json"
     path.write_text(json.dumps(snap.to_dict(), default=str), encoding="utf-8")
     return path
+
+
+@pytest.fixture(autouse=True)
+def _wall_clock(monkeypatch):
+    """`--from` makes the CLI judge a snapshot as of its collection time (a process-wide setting); reset it."""
+    import kubesift.util
+
+    monkeypatch.setattr(kubesift.util, "_as_of", None)

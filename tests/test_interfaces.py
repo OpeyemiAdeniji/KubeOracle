@@ -168,3 +168,27 @@ def test_server_adds_llm_explanation_in_background(snap, settings, monkeypatch):
             break
         time.sleep(0.1)
     assert item["llm_pending"] is False and item["diagnosis"]["summary"].startswith("AI says")
+
+
+def test_saved_snapshot_is_judged_as_of_when_it_was_taken(snapshot_file, monkeypatch):
+    """Read 10 days later, a snapshot must still say 'NotReady for 40m' and '3 days' left on the certificate."""
+    from datetime import datetime, timedelta, timezone
+
+    import kubesift.util
+
+    later = datetime.now(timezone.utc) + timedelta(days=10)
+
+    class TenDaysLater(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return later
+
+    monkeypatch.setattr(kubesift.util, "datetime", TenDaysLater)
+    assert kubesift.util.now() == later  # the clock really moved
+
+    result = runner.invoke(app, ["diagnose", "--from", str(snapshot_file), "-o", "json", "--no-llm"])
+    assert result.exit_code == 0, result.output
+    findings = {f["check"]: f for f in json.loads(result.output)["findings"]}
+    assert "40m" in findings["node-not-ready"]["message"]
+    cert = findings["certificate-expiring"]["message"]
+    assert "expired" not in cert.lower() and ("3 day" in cert or "2 day" in cert), cert

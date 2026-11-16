@@ -135,7 +135,9 @@ def test_rbac_and_mesh_hints(settings):
     snap = make(pods=[p])
     snap.logs["shop/worker/app"] = {"previous": True, "errors": [
         'pods is forbidden: User "system:serviceaccount:shop:default" cannot list resource "pods"'], "tail": []}
-    assert "ServiceAccount is not allowed" in checks(snap, settings)["pod-crashloop"].message
+    msg = checks(snap, settings)["pod-crashloop"].message
+    assert "Kubernetes RBAC: ServiceAccount shop/default is not allowed to list pods" in msg
+    assert "kubectl auth can-i list pods --as=system:serviceaccount:shop:default" in msg
     mesh = pod("api", statuses=[{"name": "app", "ready": True, "state": {"running": {}}},
                                 {"name": "istio-proxy", "ready": False, "state": {"running": {"startedAt": ts(minutes_ago=40)}}}],
                conditions=[{"type": "Ready", "status": "False", "lastTransitionTime": ts(minutes_ago=30)}])

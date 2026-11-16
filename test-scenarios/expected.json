@@ -8,5 +8,6 @@
   "secret-test": ["pod-config-error", "config-ref-missing"],
   "pvc-test": ["pvc-pending"],
   "dns-test": ["netpol-blocks-dns"],
-  "rollout-test": ["pod-crashloop"]
+  "rollout-test": ["pod-crashloop"],
+  "rbac-test": ["pod-access-denied"]
 }
