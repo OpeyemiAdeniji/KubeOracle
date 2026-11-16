@@ -1,0 +1,5 @@
+# Artifact Hub repository metadata (https://artifacthub.io/docs/topics/repositories/helm-charts/).
+# Pushed to oci://ghcr.io/opeyemiadeniji/charts/kubesift under the tag "artifacthub.io" by
+# .github/workflows/artifacthub.yml. The ID matches the repository in Artifact Hub's control panel and earns the
+# "Verified publisher" badge.
+repositoryID: 96c52077-4dc0-48f2-922c-e159a6df4401
