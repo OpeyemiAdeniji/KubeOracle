@@ -6,12 +6,13 @@ import json
 from typing import Any
 
 from rich.console import Console, Group
+from rich.padding import Padding
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
 from kubesift import __version__
-from kubesift.models import Change, Finding, Report, Severity
+from kubesift.models import Change, Diagnosis, Finding, Report, Severity
 
 COLORS = {"critical": "bold red", "high": "red", "medium": "yellow", "low": "cyan", "info": "dim"}
 
@@ -20,7 +21,31 @@ def sev(s: Severity) -> Text:
     return Text(s.value.upper(), style=COLORS[s.value])
 
 
+def _hanging(marker: str, text: Text, indent: int = 0, style: str = "") -> Padding:
+    """`marker text` where wrapped lines line up under the text, not under the marker or the panel edge."""
+    grid = Table.grid(padding=(0, 1))
+    grid.add_column(no_wrap=True)
+    grid.add_column(overflow="fold")
+    grid.add_row(Text(marker, style=style), text)
+    return Padding(grid, (0, 0, 0, indent))
+
+
 # ---------------------------------------------------------------- terminal
+def diagnosis_panel(d: Diagnosis, max_causes: int = 5) -> Panel:
+    body: list[Any] = [Text(d.summary)]
+    for i, rc in enumerate(d.root_causes[:max_causes], 1):
+        body.append(Text(""))
+        body.append(_hanging(f"{i}.", Text.assemble((rc.title, "bold"), (f"  [{rc.confidence}% confidence]", "dim"))))
+        body.append(Padding(Text(rc.explanation), (0, 0, 0, 3)))
+        for s in rc.fix_steps[:4]:
+            body.append(_hanging("→", Text(s, style="green"), indent=3, style="green"))
+        for c in rc.commands[:3]:
+            body.append(_hanging("$", Text(c, style="cyan"), indent=3, style="cyan"))
+    if d.next_checks:
+        body.append(Text("\nNext checks: " + "; ".join(d.next_checks[:4]), style="dim"))
+    return Panel(Group(*body), title=f"Diagnosis ({d.generated_by})", border_style="magenta")
+
+
 def print_report(console: Console, report: Report, show_risks: bool = False, verbose: bool = False) -> None:
     counts = report.counts()
     problems = [f for f in report.findings if f.kind == "problem"]
@@ -31,19 +56,8 @@ def print_report(console: Console, report: Report, show_risks: bool = False, ver
     if report.question:
         console.print(Text(f"Q: {report.question}", style="bold"))
 
-    d = report.diagnosis
-    if d:
-        body: list[Any] = [Text(d.summary)]
-        for i, rc in enumerate(d.root_causes[:5], 1):
-            body.append(Text.assemble(f"\n{i}. ", (rc.title, "bold"), (f"  [{rc.confidence}% confidence]", "dim")))
-            body.append(Text(f"   {rc.explanation}"))
-            for s in rc.fix_steps[:4]:
-                body.append(Text(f"   → {s}", style="green"))
-            for c in rc.commands[:3]:
-                body.append(Text(f"   $ {c}", style="cyan"))
-        if d.next_checks:
-            body.append(Text("\nNext checks: " + "; ".join(d.next_checks[:4]), style="dim"))
-        console.print(Panel(Group(*body), title=f"Diagnosis ({d.generated_by})", border_style="magenta"))
+    if report.diagnosis:
+        console.print(diagnosis_panel(report.diagnosis))
 
     if problems:
         t = Table(title="Problems", show_lines=False, expand=True)

@@ -28,6 +28,7 @@
       <img src="favicon.svg" alt="" width="28" height="28"><span>KubeSift</span>
     </a>
     <nav class="links" aria-label="Main">
+      <a href="#start">Get started</a>
       <a href="#how">How it works</a>
       <a href="#lifecycle">Features</a>
       <a href="#ways">Ways to use</a>
@@ -50,7 +51,7 @@
     </div>
   </div>
   <div class="mobile-menu" id="mobile-menu" hidden>
-    <a href="#how">How it works</a><a href="#lifecycle">Features</a><a href="#ways">Ways to use</a><a href="#catches">What it catches</a>
+    <a href="#start">Get started</a><a href="#how">How it works</a><a href="#lifecycle">Features</a><a href="#ways">Ways to use</a><a href="#catches">What it catches</a>
     <a href="#trust">Trust</a><a href="https://github.com/OpeyemiAdeniji/KubeSift/tree/main/docs">Docs</a>
     <a href="https://github.com/OpeyemiAdeniji/KubeSift">GitHub</a>
   </div>
@@ -82,7 +83,7 @@
 
     <div class="cta-row">
       <a class="btn btn-primary" href="https://github.com/OpeyemiAdeniji/KubeSift">Star on GitHub</a>
-      <a class="btn btn-ghost" href="#how">See how it works →</a>
+      <a class="btn btn-ghost" href="#start">Get started →</a>
     </div>
 
     <!-- Animated terminal -->
@@ -115,8 +116,73 @@ $ kubectl rollout undo deployment/checkout -n shop --to-revision=1</pre>
 <section class="wrap stats" aria-label="Key numbers">
   <div class="stat"><b data-count="79">0</b><span>% of production incidents follow a change<a class="cite" href="https://komodor.com/blog/komodor-2025-enterprise-kubernetes-report-finds-nearly-80-of-production-outages/" title="Komodor 2025 Enterprise Kubernetes Report">¹</a></span></div>
   <div class="stat"><b data-count="71">0</b><span>evidence-based checks, from crash loops to retired ingress controllers</span></div>
-  <div class="stat"><b>~3s</b><span>to analyse a 5,000-pod cluster</span></div>
+  <div class="stat"><b>~3s</b><span>to analyse a 5,000-pod cluster once it is read</span></div>
   <div class="stat"><b>0</b><span>Secret values kept — only key names and certificate dates</span></div>
+</section>
+
+<!-- GET STARTED -->
+<section class="section" id="start">
+  <div class="wrap">
+    <p class="eyebrow">Get started</p>
+    <h2>Running in five minutes.</h2>
+    <p class="sub">You need Python 3.10 or newer and a cluster that <code>kubectl</code> can reach. KubeSift only reads your
+      cluster; it changes nothing unless you run <code>kubesift fix</code> and confirm.</p>
+    <ol class="start">
+      <li class="start-step">
+        <div>
+          <h3>Install</h3>
+          <pre><code><span class="c">$</span> pipx install "kubesift[all]"</code></pre>
+          <p>No pipx? Run <code>python -m pip install --user pipx</code> and <code>python -m pipx ensurepath</code>, then open a
+            new terminal. <code>pip install "kubesift[all]"</code> in a virtualenv works too.</p>
+        </div>
+      </li>
+      <li class="start-step">
+        <div>
+          <h3>Check kubectl reaches your cluster</h3>
+          <pre><code><span class="c">$</span> kubectl get nodes</code></pre>
+          <p>KubeSift uses the same kubeconfig and current context. No cluster yet?
+            <a class="link" href="https://kind.sigs.k8s.io/">kind</a> makes a local one in a minute (needs Docker):
+            <code>kind create cluster</code>.</p>
+        </div>
+      </li>
+      <li class="start-step">
+        <div>
+          <h3>Check the setup</h3>
+          <pre><code><span class="c">$</span> kubectl sift doctor</code></pre>
+          <p>Connection, read permissions, metrics and AI configuration, with a fix for anything missing.</p>
+        </div>
+      </li>
+      <li class="start-step">
+        <div>
+          <h3>Find what's broken</h3>
+          <pre><code><span class="c">$</span> kubectl sift diagnose
+<span class="c">$</span> kubectl sift diagnose -n shop -v
+<span class="c">$</span> kubectl sift ask "why is checkout failing?"</code></pre>
+          <p>All namespaces, or one with <code>-n</code>. <code>-v</code> adds the evidence and recent changes.</p>
+        </div>
+      </li>
+      <li class="start-step">
+        <div>
+          <h3>Practise on a safe failure<span class="opt">optional</span></h3>
+          <pre><code><span class="c">$</span> kubectl sift drill start crashloop --yes
+<span class="c">$</span> kubectl sift diagnose -n kubesift-drill
+<span class="c">$</span> kubectl sift drill reveal crashloop
+<span class="c">$</span> kubectl sift drill stop</code></pre>
+          <p>A drill breaks a separate <code>kubesift-drill</code> namespace on purpose, so you can see a diagnosis without
+            waiting for a real incident.</p>
+        </div>
+      </li>
+      <li class="start-step">
+        <div>
+          <h3>Add AI explanations<span class="opt">optional</span></h3>
+          <pre><code><span class="c">$</span> export ANTHROPIC_API_KEY=...   <span class="g"># or OPENAI_API_KEY / OPENROUTER_API_KEY</span>
+<span class="c">$</span> kubectl sift doctor</code></pre>
+          <p>Everything above works without AI. A local <a class="link" href="https://github.com/OpeyemiAdeniji/KubeSift#ai-is-optional-and-careful">Ollama model</a>
+            works too, but without a GPU an answer takes minutes.</p>
+        </div>
+      </li>
+    </ol>
+  </div>
 </section>
 
 <!-- HOW IT WORKS -->
@@ -315,7 +381,7 @@ https://kubesift.your-co.com/mcp</code></pre>
       <button class="copy" type="button" data-copy-target="final-cmd" aria-label="Copy command">Copy</button>
     </div>
     <div class="cta-row">
-      <a class="btn btn-primary" href="https://github.com/OpeyemiAdeniji/KubeSift">Get started on GitHub</a>
+      <a class="btn btn-primary" href="#start">Get started</a>
       <a class="btn btn-ghost" href="https://github.com/OpeyemiAdeniji/KubeSift/blob/main/docs/production.md">Production guide</a>
     </div>
   </div>

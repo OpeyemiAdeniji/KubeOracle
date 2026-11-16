@@ -2,7 +2,28 @@ apiVersion: v2
 name: kubesift
 description: Evidence-based Kubernetes troubleshooting service (dashboard, API, Alertmanager receiver, background scans)
 type: application
-version: 2.1.2
-appVersion: "2.1.2"
-home: https://github.com/OpeyemiAdeniji/KubeSift
-keywords: [kubernetes, troubleshooting, sre, observability]
+version: 2.1.3
+appVersion: "2.1.3"
+home: https://opeyemiadeniji.github.io/KubeSift/
+sources:
+  - https://github.com/OpeyemiAdeniji/KubeSift
+icon: https://raw.githubusercontent.com/OpeyemiAdeniji/KubeSift/main/website/favicon.svg
+keywords: [kubernetes, troubleshooting, sre, observability, incident-response, mcp]
+maintainers:
+  - name: Opeyemi Adeniji
+    url: https://github.com/OpeyemiAdeniji
+annotations:
+  # Read by Artifact Hub (https://artifacthub.io/docs/topics/annotations/helm/). The image tag must equal appVersion;
+  # tests/test_release.py checks it.
+  artifacthub.io/license: Apache-2.0
+  artifacthub.io/category: monitoring-logging
+  artifacthub.io/images: |
+    - name: kubesift
+      image: ghcr.io/opeyemiadeniji/kubesift:2.1.3
+  artifacthub.io/links: |
+    - name: Website
+      url: https://opeyemiadeniji.github.io/KubeSift/
+    - name: Documentation
+      url: https://github.com/OpeyemiAdeniji/KubeSift/tree/main/docs
+    - name: Production guide
+      url: https://github.com/OpeyemiAdeniji/KubeSift/blob/main/docs/production.md

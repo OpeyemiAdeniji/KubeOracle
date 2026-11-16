@@ -2,24 +2,71 @@
 
 **Find out what is broken in Kubernetes, why, and what changed — in one command.**
 
-[Website](https://opeyemiadeniji.github.io/KubeSift/) · [Docs](docs/) · [Production guide](docs/production.md)
+[![PyPI](https://img.shields.io/pypi/v/kubesift)](https://pypi.org/project/kubesift/)
+[![CI](https://github.com/OpeyemiAdeniji/KubeSift/actions/workflows/ci.yml/badge.svg)](https://github.com/OpeyemiAdeniji/KubeSift/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+
+[Website](https://opeyemiadeniji.github.io/KubeSift/) · [Quick start](#quick-start) · [Docs](docs/) · [Production guide](docs/production.md)
 
 KubeSift reads your cluster, runs 71 deterministic checks, links each failure to the change that most likely
 caused it (a rollout, a ConfigMap edit, a Helm upgrade, a node going away) and tells you the fix, with the
 exact commands. An LLM is optional: it ranks and explains the evidence, it never invents it.
 
-```text
-$ kubectl sift diagnose -n shop
-╭─ Diagnosis ─────────────────────────────────────────────────────────────────────────────╮
-│ 1. Deployment/shop/checkout: Container is crash looping  [85% confidence]                 │
-│    Container 'app' is in CrashLoopBackOff (exit code 1). The application expects          │
-│    environment variable DATABASE_URL, which is not set on the container. This started     │
-│    after: Deployment checkout rolled out revision 2: image checkout:1.4 -> checkout:1.5   │
-│    (app: env removed DATABASE_URL).                                                       │
-│    → If the change caused it, roll back first, then investigate.                          │
-│    $ kubectl rollout undo deployment/checkout -n shop --to-revision=1                     │
-╰───────────────────────────────────────────────────────────────────────────────────────────╯
-```
+![KubeSift explaining a crash loop: the rollout that removed DATABASE_URL, and the rollback command](https://raw.githubusercontent.com/OpeyemiAdeniji/KubeSift/main/docs/images/diagnose.svg)
+
+<sub>Real output on the demo cluster used by the tests (`python scripts/gen_readme_image.py`).</sub>
+
+## Quick start
+
+You need Python 3.10 or newer and a cluster that `kubectl` can reach. KubeSift only reads; it never changes
+the cluster unless you run `kubesift fix` and confirm.
+
+1. **Install.**
+
+   ```bash
+   pipx install "kubesift[all]"
+   ```
+
+   No pipx? `python -m pip install --user pipx && python -m pipx ensurepath`, then open a new terminal.
+   `pip install "kubesift[all]"` in a virtualenv works too.
+
+2. **Check that kubectl reaches your cluster.** KubeSift uses the same kubeconfig and current context.
+
+   ```bash
+   kubectl get nodes
+   ```
+
+   No cluster yet? [kind](https://kind.sigs.k8s.io/) makes a local one in a minute (needs Docker):
+   `kind create cluster`.
+
+3. **Check the setup.** Connection, read permissions, metrics and AI configuration, with a fix for anything missing.
+
+   ```bash
+   kubectl sift doctor
+   ```
+
+4. **Find what is broken.** All namespaces, or one with `-n`; `-v` adds evidence and recent changes.
+
+   ```bash
+   kubectl sift diagnose
+   kubectl sift diagnose -n shop -v
+   kubectl sift ask "why is checkout failing?"
+   ```
+
+5. **Practise on a safe failure** (optional). A drill breaks a separate `kubesift-drill` namespace on purpose:
+
+   ```bash
+   kubectl sift drill start crashloop --yes
+   kubectl sift diagnose -n kubesift-drill
+   kubectl sift drill reveal crashloop
+   kubectl sift drill stop
+   ```
+
+6. **Add AI explanations** (optional). Everything above works without it.
+   `export ANTHROPIC_API_KEY=...` (or `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, or a local
+   [Ollama](#ai-is-optional-and-careful) model), then run `kubectl sift doctor` again.
+
+`kubesift` and `kubectl sift` are the same command.
 
 ## Why
 
@@ -39,18 +86,11 @@ dashboards, logs, Git and chat. KubeSift answers the on-call questions directly:
 - **What is it costing?** Over-requested CPU/memory with right-sizing values from real usage, idle GPUs,
   unused volumes and idle load balancers.
 
-## Install
+## Run it in the cluster
 
-```bash
-pipx install "kubesift[all]"      # CLI + kubectl plugin + server + MCP
-kubectl sift doctor               # checks access, permissions, metrics and LLM setup
-```
-
-`kubesift` and `kubectl sift` are the same command. It uses your kubeconfig and needs read access only.
-
-In the cluster (dashboard, API, MCP endpoint, Alertmanager receiver, background scans with Slack/Teams alerts).
-Images and charts are signed; for high availability (2+ replicas on PostgreSQL) see
-[docs/production.md](docs/production.md):
+A Helm chart runs the dashboard, REST API, shared MCP endpoint, Alertmanager receiver and background scans
+that post to Slack or Teams. Images and charts are signed; for high availability (2+ replicas on PostgreSQL)
+see [docs/production.md](docs/production.md):
 
 ```bash
 helm install kubesift oci://ghcr.io/opeyemiadeniji/charts/kubesift -n kubesift --create-namespace \
@@ -109,7 +149,7 @@ and `lint` takes `-o sarif` (GitHub code scanning). `--fail-on high` makes CI fa
 |---|---|
 | Anthropic | `export ANTHROPIC_API_KEY=...` (default model `claude-opus-5-5`; `pip install "kubesift[anthropic]"`) |
 | OpenAI / OpenRouter | `export OPENAI_API_KEY=...` or `OPENROUTER_API_KEY=...` |
-| Local (Ollama, vLLM) | `export KUBESIFT_LLM_PROVIDER=ollama KUBESIFT_LLM_MODEL=llama3.1` |
+| Local (Ollama, vLLM) | `export KUBESIFT_LLM_PROVIDER=ollama KUBESIFT_LLM_MODEL=llama3.1` (without a GPU expect minutes per answer; raise `KUBESIFT_LLM_TIMEOUT`) |
 | None | Works fully on rules: `--no-llm` or `KUBESIFT_LLM_PROVIDER=none` |
 
 - Secret and ConfigMap **values are never kept**: they are reduced to key names the moment they are read, and
