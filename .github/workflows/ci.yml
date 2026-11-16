@@ -68,7 +68,9 @@ jobs:
         with:
           paths: test-scenarios/01-crashloop-missing-env.yaml test-scenarios/09-netpol-blocks-dns.yaml  # 09 is high
           fail-on: high
-          sarif: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
+          # Upload only on this repo's own pull requests: on main the deliberately broken test files would become
+          # open alerts in the Security tab (and fork PRs have no permission to upload).
+          sarif: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
       - name: Check the outcome and the SARIF report
         env:
           OUTCOME: ${{ steps.broken.outcome }}
