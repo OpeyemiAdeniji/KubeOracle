@@ -16,6 +16,23 @@ def _ref(obj: dict[str, Any]) -> ResourceRef:
     return ResourceRef(kind=obj.get("kind", "?"), name=meta(obj).get("name", ""), namespace=meta(obj).get("namespace"))
 
 
+def argo_target_namespaces(app: dict[str, Any]) -> set[str]:
+    """Namespaces an Argo CD Application deploys into: its destination plus those of the resources it manages."""
+    out = {r["namespace"] for r in (app.get("status") or {}).get("resources") or [] if r.get("namespace")}
+    dest = ((app.get("spec") or {}).get("destination") or {}).get("namespace")
+    if dest:
+        out.add(dest)
+    return out
+
+
+def argo_manages(app: dict[str, Any] | None, ref: ResourceRef) -> bool:
+    """True when the Application's status lists this resource among the ones it manages."""
+    for r in ((app or {}).get("status") or {}).get("resources") or []:
+        if r.get("kind") == ref.kind and r.get("name") == ref.name and (r.get("namespace") or None) == ref.namespace:
+            return True
+    return False
+
+
 def last_user_update(obj: dict[str, Any]) -> tuple[datetime | None, str | None]:
     """Latest spec/data change (ignores status updates and controllers)."""
     best: tuple[datetime | None, str | None] = (None, None)
@@ -127,17 +144,23 @@ def detect_changes(snap: Snapshot, window: timedelta = timedelta(hours=6)) -> li
             rollback_command=f"helm rollback {rel['name']} {r - 1} -n {rel.get('namespace')}" if r > 1 else None,
         ))
 
-    # Argo CD syncs
+    # Argo CD syncs. The Application usually lives in the argocd namespace; what matters is where it deploys.
     for app in snap.all("argoapps"):
         op = (app.get("status") or {}).get("operationState") or {}
         t = parse_time(op.get("finishedAt") or op.get("startedAt"))
         if not t or t < cutoff:
             continue
+        targets = argo_target_namespaces(app)
+        if snap.namespace and snap.namespace not in targets | {meta(app).get("namespace")}:
+            continue
         git_rev = ((op.get("syncResult") or {}).get("revision") or "")[:10]
+        details = [f"deploys to: {', '.join(sorted(targets))}"] if targets else []
+        if op.get("message"):
+            details.append(op["message"][:200])
         changes.append(Change(time=t, kind="argocd", resource=_ref(app),
                               summary=f"Argo CD synced {meta(app).get('name')} to {git_rev or 'a new revision'} "
                                       f"({op.get('phase')})",
-                              details=[op.get("message", "")[:200]] if op.get("message") else []))
+                              details=details))
 
     # Nodes joining
     for node in snap.all("nodes"):
@@ -160,6 +183,6 @@ def detect_changes(snap: Snapshot, window: timedelta = timedelta(hours=6)) -> li
                               summary=f"{reason}: {(e.get('message') or '')[:160]}"))
 
     changes.sort(key=lambda c: c.time, reverse=True)
-    if snap.namespace:
-        changes = [c for c in changes if c.resource.namespace in (snap.namespace, None)]
+    if snap.namespace:  # Argo CD syncs were already filtered by the namespaces they deploy to
+        changes = [c for c in changes if c.kind == "argocd" or c.resource.namespace in (snap.namespace, None)]
     return changes

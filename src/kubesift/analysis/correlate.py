@@ -6,6 +6,7 @@ import hashlib
 from datetime import timedelta
 from typing import Any
 
+from kubesift.analysis.changes import argo_manages
 from kubesift.cluster.snapshot import Snapshot
 from kubesift.models import Category, Change, Finding, Incident, ResourceRef, Severity
 from kubesift.util import containers_of, meta, now, pod_spec_of
@@ -72,6 +73,8 @@ def score_change(snap: Snapshot, f: Finding, c: Change, config_refs: set[tuple[s
     if c.kind == "config" and (c.resource.kind, c.resource.name) in config_refs and c.resource.namespace == owner.namespace:
         return 70 + recency
     if c.kind == "helm" and _helm_owns(snap, c.resource, owner):
+        return 75 + recency
+    if c.kind == "argocd" and argo_manages(snap.get("argoapps", c.resource.namespace, c.resource.name), owner):
         return 75 + recency
     if c.kind == "node" and f.node and c.resource.name == f.node:
         return 70 + recency

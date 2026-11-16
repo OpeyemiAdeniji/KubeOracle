@@ -193,3 +193,15 @@ def test_kubeconfig_problems_are_explained(tmp_path, monkeypatch):
     assert [c["name"] for c in items] == ["c"] and current is None
     with pytest.raises(ClusterAccessError, match="no kubeconfig found"):
         list_contexts(str(tmp_path / "missing"))
+
+
+def test_namespace_scan_reads_argo_apps_from_every_namespace(fake_api):
+    """Argo CD Applications live in the argocd namespace but deploy into others."""
+    from kubesift.cluster.client import KubeClient
+    from kubesift.cluster.snapshot import collect
+
+    kubeconfig, seen = fake_api
+    collect(KubeClient(kubeconfig=kubeconfig), namespace="shop", with_logs=False)
+    paths = [p for method, p, _ in seen if method == "GET" and "argoproj.io" in p]
+    assert paths and all("/namespaces/" not in p for p in paths)
+    assert any("/namespaces/shop/pods" in p for method, p, _ in seen)  # everything else stays namespace-scoped

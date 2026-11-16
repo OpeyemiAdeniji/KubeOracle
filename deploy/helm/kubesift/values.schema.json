@@ -1,0 +1,123 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "KubeSift Helm chart values",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "global": {"type": "object", "description": "Set by Helm when this chart is used as a dependency."},
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "repository": {"type": "string", "minLength": 1},
+        "tag": {"type": "string", "description": "Empty uses the chart appVersion."},
+        "pullPolicy": {"type": "string", "enum": ["Always", "IfNotPresent", "Never"]}
+      }
+    },
+    "replicaCount": {
+      "type": "integer", "minimum": 1,
+      "description": "2 or more needs database.url (PostgreSQL); one replica runs scans via a Lease."
+    },
+    "database": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "url": {"type": "string", "description": "postgresql://user:password@host:5432/kubesift; empty uses SQLite."},
+        "fromExistingSecret": {"type": "boolean"}
+      }
+    },
+    "apiToken": {"type": "string", "description": "Token for the dashboard, API and MCP; generated when empty."},
+    "existingSecret": {"type": "string", "description": "Secret with api-token, database-url and API keys."},
+    "llm": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "provider": {"type": "string", "enum": ["anthropic", "openai", "openrouter", "ollama", "none", "auto"]},
+        "model": {"type": "string"},
+        "baseUrl": {"type": "string"},
+        "timeout": {"type": "integer", "minimum": 0, "description": "Seconds per AI answer; 0 = default."},
+        "anthropicApiKey": {"type": "string"},
+        "openaiApiKey": {"type": "string"},
+        "openrouterApiKey": {"type": "string"},
+        "sendLogs": {"type": "boolean"}
+      }
+    },
+    "prometheus": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {"url": {"type": "string"}}
+    },
+    "scan": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "interval": {"type": "integer", "minimum": 0, "description": "Seconds between background scans; 0 disables."},
+        "namespace": {"type": "string"},
+        "notifyMinSeverity": {"type": "string", "enum": ["critical", "high", "medium", "low", "info"]}
+      }
+    },
+    "notifications": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "slackWebhookUrl": {"type": "string"},
+        "teamsWebhookUrl": {"type": "string"},
+        "webhookUrl": {"type": "string"}
+      }
+    },
+    "slack": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "signingSecret": {"type": "string"},
+        "allowedUsers": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "rbac": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "create": {"type": "boolean"},
+        "readSecrets": {"type": "boolean"},
+        "allowWrites": {"type": "boolean"}
+      }
+    },
+    "persistence": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "size": {"type": "string"},
+        "storageClass": {"type": "string"}
+      }
+    },
+    "service": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {"type": "string", "enum": ["ClusterIP", "NodePort", "LoadBalancer"]},
+        "port": {"type": "integer", "minimum": 1, "maximum": 65535}
+      }
+    },
+    "ingress": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "className": {"type": "string"},
+        "annotations": {"type": "object"},
+        "hosts": {"type": "array", "items": {"type": "object"}},
+        "tls": {"type": "array", "items": {"type": "object"}}
+      }
+    },
+    "networkPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {"enabled": {"type": "boolean"}}
+    },
+    "resources": {"type": "object"},
+    "nodeSelector": {"type": "object"},
+    "tolerations": {"type": "array"},
+    "affinity": {"type": "object"}
+  }
+}

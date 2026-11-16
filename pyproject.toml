@@ -38,7 +38,7 @@ mcp = ["mcp>=2,<3"]
 anthropic = ["anthropic>=2.8"]
 postgres = ["psycopg[binary]>=3.1"]
 all = ["kubesift[server,mcp,anthropic,postgres]"]
-dev = ["kubesift[all]", "pytest>=8", "ruff>=0.6", "pytest-cov>=5"]
+dev = ["kubesift[all]", "pytest>=8", "ruff>=0.6", "pytest-cov>=5", "jsonschema>=4"]
 
 [project.scripts]
 kubesift = "kubesift.cli:main"
