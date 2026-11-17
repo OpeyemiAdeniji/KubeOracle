@@ -33,7 +33,8 @@ class Plan:
     content_type: str | None = None
 
 
-def plan(client: KubeClient, action: str, kind: str, namespace: str, name: str, replicas: int | None = None) -> Plan:
+def plan(client: KubeClient, action: str, kind: str, namespace: str, name: str, replicas: int | None = None,
+         to_revision: int | None = None) -> Plan:
     from kubesift.util import check_name
 
     if not namespace or not name:
@@ -73,7 +74,20 @@ def plan(client: KubeClient, action: str, kind: str, namespace: str, name: str, 
         owned.sort(key=rev)
         if len(owned) < 2:
             raise ValueError("no previous revision to roll back to")
-        prev = owned[-2]
+        current = owned[-1]
+        if to_revision is not None:
+            prev = next((rs for rs in owned if rev(rs) == to_revision), None)
+            if prev is None or prev is current:
+                kept = ", ".join(str(rev(rs)) for rs in owned[:-1])
+                raise ValueError(f"revision {to_revision} is not a previous revision (kept: {kept})")
+        else:
+            # The previous *version*: skip revisions that only restarted the current one (`rollout restart`),
+            # otherwise "roll back" would bring back the same broken pods.
+            from kubesift.util import template_version
+            prev = next((rs for rs in reversed(owned[:-1]) if template_version(rs) != template_version(current)), None)
+            if prev is None:
+                raise ValueError("every earlier revision is only a restart of the current version; "
+                                 "there is no different version to roll back to")
         template = json.loads(json.dumps((prev.get("spec") or {}).get("template") or {}))
         labels = (template.get("metadata") or {}).get("labels") or {}
         labels.pop("pod-template-hash", None)

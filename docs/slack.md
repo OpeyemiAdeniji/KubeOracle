@@ -12,8 +12,11 @@ Investigate from the channel where the incident is being discussed:
 When a recent rollout is the likely cause, the answer has a **Roll back (dry run)** button. It runs a
 server-side dry run first. An **Apply for real** button appears only when the server has
 `allow_writes` enabled **and** the Slack user is listed in `slack_allowed_users` (an empty list means nobody
-can apply from Slack). Every action is in the audit log with
-the Slack user ID.
+can apply from Slack). After a real apply, KubeSift waits for the rollout, watches the new pods and re-runs the
+checks, then posts a follow-up: **Verified: … is healthy**, or that it is still failing and why. Every action and
+verification is in the audit log with the Slack user ID.
+
+When [tickets](tickets.md) are set up, each incident also has an **Open GitHub issue** button.
 
 ## Setup (about 5 minutes)
 

@@ -393,12 +393,20 @@ def fix(
     resource: str = typer.Argument(..., help="kind/name, e.g. deployment/checkout or pod/web-abc"),
     namespace: str = typer.Option("default", "--namespace", "-n"),
     replicas: int | None = typer.Option(None, "--replicas"),
+    to_revision: int | None = typer.Option(None, "--to-revision",
+                                           help="rollback: this revision (default: the previous different version)"),
     yes: bool = typer.Option(False, "--yes", "-y", help="Apply after a successful dry run without asking."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Only run the server-side dry run."),
+    check: bool = typer.Option(True, "--verify/--no-verify",
+                               help="After applying, wait for the rollout and re-check that the problem is gone."),
+    verify_timeout: int = typer.Option(180, "--verify-timeout", help="Seconds to wait for the rollout when verifying."),
 ) -> None:
-    """Apply a guarded fix: shows the plan, runs a server-side dry run, then asks before changing anything."""
+    """Apply a guarded fix: shows the plan, runs a server-side dry run, asks, applies, then verifies it worked.
+
+    Exit codes: 0 fixed (or dry run ok), 3 still failing or not verified, 1 error or cancelled."""
     from kubesift.cluster.client import KubeClient, KubeError
     from kubesift.remediate import execute, plan
+    from kubesift.verify import workload_of_pod
 
     if "/" not in resource:
         _fail("use kind/name")
@@ -408,7 +416,7 @@ def fix(
     s = state.settings
     try:
         client = KubeClient(kubeconfig=s.kubeconfig, context=s.context, timeout=s.request_timeout)
-        p = plan(client, action, kind, namespace, name, replicas)
+        p = plan(client, action, kind, namespace, name, replicas, to_revision)
     except (ValueError, KubeError) as exc:
         _fail(str(exc))
     except Exception as exc:
@@ -426,10 +434,112 @@ def fix(
     if not yes and not typer.confirm("Apply this change to the cluster?", default=False):
         console.print("Cancelled.")
         raise typer.Exit(1)
+    # A deleted pod can't be looked up afterwards: find the workload that will recreate it first.
+    target = (kind, name)
+    if check and action == "delete-pod":
+        try:
+            target = workload_of_pod(client, namespace, name)
+        except (ValueError, KubeError) as exc:
+            console.print(Text(f"Will not verify: {exc}", style="yellow"))
+            check = False
     try:
         console.print(Text(f"Result: {execute(client, p, False, store)}", style="bold green"))
     except KubeError as exc:
         _fail(exc.message)
+    if check:
+        _verify_and_report(client, store, target[0], namespace, target[1], verify_timeout, 20, "text")
+
+
+def _verify_and_report(client: Any, store: Any, kind: str, namespace: str, name: str, timeout: int, settle: int,
+                       output: str) -> None:
+    from kubesift.cluster.client import KubeError
+    from kubesift.verify import verify as run_verify
+
+    def progress(msg: str) -> None:
+        if output == "text":
+            err.print(Text(f"  … {msg}", style="dim"))
+
+    if output == "text":
+        console.print(Text(f"Verifying {kind}/{name} (up to {timeout}s)…", style="bold"))
+    try:
+        v = run_verify(state.settings, client, kind, namespace, name, timeout=timeout, settle=settle,
+                       progress=progress)
+    except (ValueError, KubeError) as exc:
+        _fail(f"cannot verify: {exc}")
+    store.audit("verify", v.target, False, f"{v.status}: {v.summary}", "cli")
+    if output == "json":
+        print(json.dumps(v.to_dict(), indent=2))
+    else:
+        mark, style = {"resolved": ("✓", "bold green"), "still-failing": ("✗", "bold red")}.get(v.status, ("…", "bold yellow"))
+        console.print(Text(f"{mark} {v.summary}", style=style))
+        for line in v.problems[1:6]:
+            console.print(Text(f"  • {line}", style="red"))
+        for c in v.commands:
+            console.print(Text(f"  $ {c}", style="cyan"))
+    if not v.ok:
+        raise typer.Exit(3)
+
+
+@app.command()
+def ticket(
+    namespace: str | None = NS,
+    incident: int = typer.Option(1, "--incident", "-i", help="Which incident, as numbered in `diagnose` (1 = most severe)."),
+    print_only: bool = typer.Option(False, "--print", help="Print the ticket as Markdown (for Jira, email...) instead."),
+    repo: str | None = typer.Option(None, "--repo", help="owner/repo (default: github_repo setting)."),
+    since: str = typer.Option("6h", "--since", help="How far back to look for the change that caused it."),
+    from_file: str | None = FROM,
+) -> None:
+    """Open a GitHub issue for an incident: evidence, likely cause, fix, commands and how to verify.
+
+    One issue per incident: if it is still open, KubeSift comments "still happening" instead of opening another.
+    Needs github_repo and a token with issues:write (KUBESIFT_GITHUB_TOKEN or GITHUB_TOKEN)."""
+    from kubesift.analysis.engine import investigate
+    from kubesift.tickets import TicketError, incident_markdown, open_github_issue
+    from kubesift.util import parse_duration
+
+    snap = _snapshot(namespace, from_file)
+    report = investigate(state.settings, snap, use_llm=False, window=parse_duration(since))
+    if not report.incidents:
+        console.print("No active problems found: nothing to open a ticket for.")
+        return
+    if not 1 <= incident <= len(report.incidents):
+        _fail(f"--incident must be between 1 and {len(report.incidents)}")
+    inc = report.incidents[incident - 1]
+    if print_only:
+        title, body = incident_markdown(report, inc)
+        print(f"# {title}\n\n{body}")
+        return
+    settings = state.settings.model_copy(update={"github_repo": repo}) if repo else state.settings
+    try:
+        result = open_github_issue(settings, report, inc)
+    except TicketError as exc:
+        _fail(str(exc))
+    verb = "Opened" if result["created"] else "Still open, added a comment to"
+    console.print(Text(f"{verb} issue #{result['number']}: {result['url']}", style="bold green"))
+
+
+@app.command("verify")
+def verify_cmd(
+    resource: str = typer.Argument(..., help="kind/name: deploy/checkout, sts/db, ds/agent or pod/web-abc"),
+    namespace: str = typer.Option("default", "--namespace", "-n"),
+    timeout: int = typer.Option(180, "--timeout", help="Seconds to wait for the rollout to finish."),
+    settle: int = typer.Option(20, "--settle", help="Seconds to watch the new pods for restarts."),
+    output: str = typer.Option("text", "--output", "-o", help="text | json"),
+) -> None:
+    """Check that a fix worked: wait for the rollout, watch the pods settle, re-run the checks on the workload.
+
+    Works after any change: `kubesift fix`, kubectl, Helm or a GitOps sync. Exit code 0 only when resolved."""
+    from kubesift.cluster.client import KubeClient
+
+    if "/" not in resource:
+        _fail("use kind/name, e.g. deploy/checkout")
+    kind, name = resource.split("/", 1)
+    s = state.settings
+    try:
+        client = KubeClient(kubeconfig=s.kubeconfig, context=s.context, timeout=s.request_timeout)
+    except Exception as exc:
+        _fail(f"cannot connect to the cluster: {exc}")
+    _verify_and_report(client, _store(), kind, namespace, name, timeout, settle, output)
 
 
 @snapshot_app.command("save")

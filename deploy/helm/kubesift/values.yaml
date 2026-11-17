@@ -17,7 +17,7 @@ database:
 apiToken: ""
 # Or reference an existing Secret with these keys:
 #   api-token, database-url, anthropic-api-key, openai-api-key, openrouter-api-key,
-#   slack-webhook-url, teams-webhook-url
+#   slack-webhook-url, teams-webhook-url, slack-signing-secret, github-token
 existingSecret: ""
 
 llm:
@@ -47,6 +47,13 @@ notifications:
 slack:
   signingSecret: ""      # from your Slack app's Basic Information page
   allowedUsers: []       # Slack user IDs allowed to apply fixes (also needs rbac.allowWrites)
+
+# Tickets: open a GitHub issue per incident, never a duplicate (see docs/tickets.md).
+tickets:
+  githubRepo: ""       # owner/repo; enables the API, MCP tool and Slack "Open GitHub issue" button
+  githubToken: ""      # fine-grained token with Issues: read and write (or existingSecret key github-token)
+  githubApiUrl: ""     # GitHub Enterprise Server, e.g. https://ghe.example.com/api/v3
+  onAlert: false        # open/update an issue for each urgent incident from alerts and background scans
 
 rbac:
   create: true

@@ -37,4 +37,7 @@ capped) with a strict JSON schema. The reply is validated: root causes that cite
 40% confidence. Any LLM failure falls back to the rule-based diagnosis.
 
 **Safety.** Read-only by default. `kubesift fix` and the API/MCP fix endpoints show a plan, run a
-server-side dry run, require confirmation (or `allow_writes`), and write an audit entry.
+server-side dry run, require confirmation (or `allow_writes`), and write an audit entry. After a real apply,
+`verify.py` waits for the rollout (the controller's own status, like `kubectl rollout status`), watches the new
+pods for restarts while they settle, re-runs the checks on that workload and reports resolved, still failing
+(with the remaining problems) or still rolling out. The verdict is written to the audit log too.

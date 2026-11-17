@@ -118,7 +118,9 @@ helm install kubesift oci://ghcr.io/opeyemiadeniji/charts/kubesift -n kubesift -
 | `kubesift postmortem -n shop` | **After:** draft a blameless postmortem with timeline, root cause and action items |
 | `kubesift drill start crashloop` | **Practise:** break a drill namespace on purpose to train on-call |
 | `kubesift knowledge export` / `import` | Share what fixed past incidents between teams and clusters |
-| `kubesift fix rollback deployment/checkout -n shop` | Guarded fix: plan → server-side dry run → confirm → audit log |
+| `kubesift fix rollback deployment/checkout -n shop` | Guarded fix: plan → server-side dry run → confirm → apply → **verify it worked** → audit log |
+| `kubesift ticket -n shop` | Open a GitHub issue for the incident (evidence, cause, fix, how to verify); never a duplicate ([tickets](docs/tickets.md)) |
+| `kubesift verify deploy/checkout -n shop` | Did the fix work? Waits for the rollout, watches the new pods, re-runs the checks (also after kubectl, Helm or GitOps changes) |
 | `kubesift snapshot save` | Redacted snapshot to analyse later with `--from` (judged as of when it was taken) or attach to a ticket |
 | `kubesift note add pod-oomkilled "Raised to 1Gi; leak fixed in 3.3"` | Team memory, shown next to matching findings |
 | `kubesift history` | Past investigations |

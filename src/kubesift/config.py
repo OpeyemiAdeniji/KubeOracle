@@ -82,6 +82,12 @@ class Settings(BaseModel):
     slack_signing_secret: str | None = Field(default=None, repr=False)  # enables /api/v1/slack/* endpoints
     slack_allowed_users: list[str] = Field(default_factory=list)  # Slack user IDs allowed to apply fixes (empty = nobody)
 
+    # Tickets: open a GitHub issue per incident (no duplicates while it is open)
+    github_repo: str | None = None  # owner/repo
+    github_token: str | None = Field(default=None, repr=False)  # issues:write; GITHUB_TOKEN also works
+    github_api_url: str | None = None  # GitHub Enterprise: https://ghe.example.com/api/v3
+    ticket_on_alert: bool = False  # open/update an issue for each critical/high incident from alerts and scans
+
     # Namespaces skipped by default when scanning all namespaces for hygiene checks
     system_namespaces: list[str] = Field(
         default_factory=lambda: ["kube-system", "kube-public", "kube-node-lease", "local-path-storage"]
