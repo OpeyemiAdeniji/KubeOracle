@@ -1,6 +1,6 @@
 # Releasing
 
-A release is one tag. The [release workflow](../.github/workflows/release.yml) then:
+A release is one tag. The [release workflow](https://github.com/OpeyemiAdeniji/KubeSift/blob/main/.github/workflows/release.yml) then:
 
 | Artifact | Where | Supply-chain evidence |
 |---|---|---|

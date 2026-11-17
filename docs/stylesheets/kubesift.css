@@ -1,0 +1,30 @@
+/* KubeSift brand colours for the docs site (Material for MkDocs). */
+:root {
+  --md-primary-fg-color: #4f46e5;
+  --md-primary-fg-color--light: #818cf8;
+  --md-primary-fg-color--dark: #3730a3;
+  --md-accent-fg-color: #0d9488;
+  --md-accent-fg-color--transparent: rgba(13, 148, 136, .1);
+}
+
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #1e1b4b;
+  --md-default-bg-color: #0b1020;
+  --md-default-fg-color--light: #c3cae0;
+  --md-code-bg-color: #131a33;
+  --md-accent-fg-color: #2dd4bf;
+  --md-typeset-a-color: #8b96ff;
+}
+
+/* Header: a subtle brand gradient instead of a flat bar */
+.md-header, .md-tabs {
+  background: linear-gradient(100deg, #0f766e 0%, #4338ca 70%, #5b21b6 100%);
+}
+[data-md-color-scheme="slate"] .md-header, [data-md-color-scheme="slate"] .md-tabs {
+  background: linear-gradient(100deg, #0b1020 0%, #1e1b4b 100%);
+  border-bottom: 1px solid #243056;
+}
+
+.md-header__button.md-logo img { height: 1.6rem; }
+.md-typeset h1 { font-weight: 800; letter-spacing: -.02em; }
+.md-typeset picture img { border-radius: 12px; }

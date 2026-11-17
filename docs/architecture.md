@@ -1,15 +1,11 @@
 # Architecture
 
-```
-            ┌────────── interfaces ──────────┐
- CLI / kubectl plugin   REST API + dashboard   MCP server   GitHub Action / pre-commit
-            └───────────────┬────────────────┘
-                            ▼
-   collect ─► Snapshot ─► checks (72) ─► changes ─► correlate ─► explain ─► Report
-   (k8s API,   (redacted,   deterministic   rollouts,   incidents,   rules or LLM
-    logs,       JSON-able)   findings with   config,    likely       (validated against
-    metrics)                 evidence        Helm, Argo  trigger      the evidence)
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/architecture-dark.svg">
+  <img alt="KubeSift architecture: interfaces, the snapshot, checks, changes, correlation and explanation, the cluster and the optional AI" src="images/architecture-light.svg">
+</picture>
+
+<sub>Regenerate with `python scripts/gen_architecture_svg.py`.</sub>
 
 **Snapshot** (`cluster/snapshot.py`). One parallel read of ~35 resource types through the Kubernetes API
 (no kubectl needed), plus metrics-server data and the previous logs of failing containers. Secrets are reduced
