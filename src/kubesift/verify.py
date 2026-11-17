@@ -16,9 +16,11 @@ from kubesift.config import Settings
 from kubesift.util import check_name
 
 KINDS = {"deployment": "deployments", "deploy": "deployments", "statefulset": "statefulsets", "sts": "statefulsets",
-         "daemonset": "daemonsets", "ds": "daemonsets", "pod": "pods", "po": "pods"}
+         "daemonset": "daemonsets", "ds": "daemonsets", "pod": "pods", "po": "pods",
+         "service": "services", "svc": "services"}
 _PATH = "/apis/apps/v1/namespaces/{ns}/{plural}/{name}"
-_TITLE = {"deployments": "Deployment", "statefulsets": "StatefulSet", "daemonsets": "DaemonSet"}
+_TITLE = {"deployments": "Deployment", "statefulsets": "StatefulSet", "daemonsets": "DaemonSet",
+          "services": "Service"}
 
 RESOLVED, FAILING, ROLLING, UNKNOWN = "resolved", "still-failing", "rolling-out", "unknown"
 
@@ -109,10 +111,12 @@ def verify(settings: Settings, client: KubeClient, kind: str, namespace: str, na
     check_name(name)
     plural = KINDS.get(kind.lower())
     if plural is None:
-        raise ValueError(f"cannot verify a {kind}; use deployment, statefulset, daemonset or pod")
+        raise ValueError(f"cannot verify a {kind}; use deployment, statefulset, daemonset, service or pod")
     if plural == "pods":
         kind, name = workload_of_pod(client, namespace, name)
         plural = KINDS[kind]
+    if plural == "services":
+        return _verify_service(settings, client, namespace, name, timeout, interval, progress, sleep, clock)
     title = _TITLE[plural]
     target = f"{title}/{namespace}/{name}"
     path = _PATH.format(ns=namespace, plural=plural, name=name)
@@ -170,3 +174,39 @@ def verify(settings: Settings, client: KubeClient, kind: str, namespace: str, na
                             f"({detail}); no problems found so far. Check again with: {again}", [], waited(), [again])
     return Verification(RESOLVED, target, f"{target} is healthy: {detail}, no restarts while watching, "
                         "and no problems found.", [], waited())
+
+
+def _ready_endpoints(client: KubeClient, ns: str, name: str) -> int:
+    slices = client.get(f"/apis/discovery.k8s.io/v1/namespaces/{ns}/endpointslices",
+                        labelSelector=f"kubernetes.io/service-name={name}").get("items") or []
+    return sum(1 for s in slices for e in s.get("endpoints") or []
+               if (e.get("conditions") or {}).get("ready") is not False)
+
+
+def _verify_service(settings: Settings, client: KubeClient, ns: str, name: str, timeout: float, interval: float,
+                    progress: Callable[[str], None] | None, sleep: Callable[[float], None],
+                    clock: Callable[[], float]) -> Verification:
+    """A Service is fixed when it has ready endpoints and the checks find nothing wrong with it."""
+    from kubesift.checks import run_checks
+    from kubesift.cluster.snapshot import collect
+
+    target, start = f"Service/{ns}/{name}", clock()
+    say = progress or (lambda _msg: None)
+    try:
+        while (ready := _ready_endpoints(client, ns, name)) == 0 and clock() - start < timeout:
+            say("waiting for ready endpoints")
+            sleep(interval)
+    except KubeError as exc:
+        if exc.status == 404:
+            return Verification(UNKNOWN, target, f"{target} no longer exists.", waited_seconds=round(clock() - start, 1))
+        raise
+    snap = collect(client, namespace=ns, with_logs=False)
+    problems = [f for f in run_checks(snap, settings) if f.kind == "problem" and f.resource.kind == "Service"
+                and f.resource.name == name and f.resource.namespace == ns]
+    waited = round(clock() - start, 1)
+    if problems or not ready:
+        lines = [f"{f.check}: {f.message}" for f in problems] or ["no ready endpoints"]
+        return Verification(FAILING, target, f"{target} is still failing: {lines[0]}", lines, waited,
+                            [c for f in problems for c in f.commands][:3])
+    return Verification(RESOLVED, target, f"{target} is healthy: {ready} ready endpoint(s) and no problems found.",
+                        [], waited)

@@ -214,18 +214,26 @@ def build_server(settings: Settings) -> MCPServer:
         @server.tool(annotations=ToolAnnotations(read_only_hint=False, destructive_hint=True, open_world_hint=False))
         @explained
         def apply_fix(action: str, kind: str, namespace: str, name: str, replicas: int | None = None,
-                      to_revision: int | None = None, dry_run: bool = True) -> str:
-            """Guarded remediation: restart | rollback | scale | delete-pod. Always run with dry_run=true first and
-            ask the user before calling with dry_run=false. After a real apply, call verify_fix on the workload."""
+                      to_revision: int | None = None, selector: dict[str, str] | None = None,
+                      match: str | None = None, container: str | None = None, memory: str | None = None,
+                      verbs: list[str] | None = None, resource: str | None = None, api_group: str = "",
+                      dry_run: bool = True) -> str:
+            """Guarded remediation. Always run with dry_run=true first and ask the user before dry_run=false;
+            after a real apply, call verify_fix with the returned arguments.
+            restart | rollback (to_revision optional) | scale (replicas) | delete-pod: kind deployment, statefulset,
+            daemonset or pod. set-selector: kind service, selector {"app": "web"} or match "deploy/web".
+            set-memory: container and memory ("512Mi"); only raises the limit. grant: kind serviceaccount, verbs and
+            resource (one, no wildcards), only when KUBESIFT_ALLOW_RBAC_FIXES=true."""
             from kubesift.cluster.client import KubeClient
-            from kubesift.remediate import execute, plan
-            from kubesift.verify import workload_of_pod
+            from kubesift.remediate import execute, plan, verification_target
+            if action == "grant" and not settings.allow_rbac_fixes:
+                raise ValueError("RBAC fixes are disabled (KUBESIFT_ALLOW_RBAC_FIXES=true enables them)")
             client = KubeClient(kubeconfig=settings.kubeconfig, context=settings.context, timeout=settings.request_timeout)
-            p = plan(client, action, kind, namespace, name, replicas, to_revision)
+            p = plan(client, action, kind, namespace, name, replicas, to_revision, selector=selector, match=match,
+                     container=container, memory=memory, verbs=verbs, resource=resource, api_group=api_group)
             verify_with = None
-            if not dry_run:
-                k, n = workload_of_pod(client, namespace, name) if action == "delete-pod" else (kind, name)
-                verify_with = {"kind": k, "namespace": namespace, "name": n}
+            if not dry_run and (t := verification_target(client, p)):
+                verify_with = {"kind": t[0], "namespace": namespace, "name": t[1]}
             return json.dumps({"plan": p.description, "kubectl": p.kubectl, "dry_run": dry_run,
                                "result": execute(client, p, dry_run, store, actor="mcp"),
                                "next": {"tool": "verify_fix", "arguments": verify_with} if verify_with else None})

@@ -62,6 +62,13 @@ class FixRequest(BaseModel):
     name: str
     replicas: int | None = None
     to_revision: int | None = None
+    selector: dict[str, str] | None = None
+    match: str | None = None
+    container: str | None = None
+    memory: str | None = None
+    verbs: list[str] | None = None
+    resource: str | None = None
+    api_group: str = ""
     dry_run: bool = True
     verify: bool = Field(True, description="After a real apply, verify in the background; poll /api/v1/verify/{id}")
 
@@ -254,15 +261,17 @@ def create_app(settings: Settings) -> FastAPI:
         from kubesift.remediate import execute, plan
         if not req.dry_run and not settings.allow_writes:
             raise HTTPException(status_code=403, detail="writes are disabled (set KUBESIFT_ALLOW_WRITES=true)")
-        from kubesift.verify import workload_of_pod
+        from kubesift.remediate import verification_target
+        if req.action == "grant" and not settings.allow_rbac_fixes:
+            raise HTTPException(status_code=403, detail="RBAC fixes are disabled (set KUBESIFT_ALLOW_RBAC_FIXES=true)")
         client = KubeClient(kubeconfig=settings.kubeconfig, context=settings.context, timeout=settings.request_timeout)
         target: tuple[str, str] | None = None
         try:
-            p = plan(client, req.action, req.kind, req.namespace, req.name, req.replicas, req.to_revision)
+            p = plan(client, req.action, req.kind, req.namespace, req.name, req.replicas, req.to_revision,
+                     selector=req.selector, match=req.match, container=req.container, memory=req.memory,
+                     verbs=req.verbs, resource=req.resource, api_group=req.api_group)
             if req.verify and not req.dry_run:
-                # A deleted pod can't be looked up afterwards; resolve the workload that recreates it first.
-                target = workload_of_pod(client, req.namespace, req.name) if req.action == "delete-pod" \
-                    else (req.kind, req.name)
+                target = verification_target(client, p)  # before applying: a deleted pod can't be looked up after
             result = execute(client, p, req.dry_run, store, actor="api")
         except (ValueError, KubeError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -534,6 +543,13 @@ def _scan_loop(settings: Settings, store: Store, state: dict[str, Any]) -> None:
             report = investigate(settings, snap, use_llm=False, window=timedelta(hours=1), store=store)
             state["last_report"] = report
             state["last_scan"] = int(time.time())
+            if settings.allow_writes and settings.auto_rollback_namespaces:
+                from kubesift import autorollback
+                client = KubeClient(kubeconfig=settings.kubeconfig, context=settings.context,
+                                    timeout=settings.request_timeout)
+                for r in autorollback.run(settings, store, report, client):
+                    notify.send(settings, report, r.incident.findings if r.incident else report.findings[:3],
+                                title=autorollback.message(r)[:150])
             try:
                 from kubesift.timetravel import digest
                 store.save_digest(digest(snap))  # history for `kubesift diff --since` / time travel
@@ -623,14 +639,14 @@ def _slack_fix(settings: Settings, store: Store, value: dict[str, Any], user: st
     # Applying from Slack needs both allow_writes and the user on an explicit allowlist (empty list = nobody).
     may_apply = bool(settings.allow_writes and user and user in settings.slack_allowed_users)
     dry_run = bool(value.get("dry_run", True)) or not may_apply
-    from kubesift.verify import verify, workload_of_pod
+    from kubesift.remediate import verification_target
+    from kubesift.verify import verify
     target: tuple[str, str] | None = None
     try:
         client = KubeClient(kubeconfig=settings.kubeconfig, context=settings.context, timeout=settings.request_timeout)
         p = plan(client, value["action"], value["kind"], value["namespace"], value["name"], value.get("replicas"))
         if not dry_run:
-            target = workload_of_pod(client, value["namespace"], value["name"]) if value["action"] == "delete-pod" \
-                else (value["kind"], value["name"])
+            target = verification_target(client, p)
         result = execute(client, p, dry_run, store, actor=f"slack:{user}")
         blocks = slack.fix_result_blocks(p.description, p.kubectl, result, dict(value, dry_run=dry_run), may_apply)
     except (KubeError, ValueError, KeyError) as exc:

@@ -200,6 +200,7 @@ def test_slack_posts_whether_the_applied_fix_worked(settings, monkeypatch):
 
     class P:
         description, kubectl = "restart", "kubectl rollout restart"
+        action, target = "restart", "deployment/shop/x"
 
     posts = []
     monkeypatch.setattr("kubesift.remediate.plan", lambda *a, **k: P())

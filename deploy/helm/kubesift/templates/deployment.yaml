@@ -80,6 +80,12 @@ spec:
               value: {{ .Values.scan.notifyMinSeverity | quote }}
             - name: KUBESIFT_ALLOW_WRITES
               value: {{ .Values.rbac.allowWrites | quote }}
+            - name: KUBESIFT_ALLOW_RBAC_FIXES
+              value: {{ and .Values.rbac.allowWrites .Values.rbac.allowRbacFixes | quote }}
+            {{- with .Values.autoRollback.namespaces }}
+            - name: KUBESIFT_AUTO_ROLLBACK_NAMESPACES
+              value: {{ join "," . | quote }}
+            {{- end }}
             {{- with .Values.slack.allowedUsers }}
             - name: KUBESIFT_SLACK_ALLOWED_USERS
               value: {{ join "," . | quote }}

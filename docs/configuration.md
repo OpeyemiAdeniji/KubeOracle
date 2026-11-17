@@ -94,6 +94,8 @@ Without Prometheus, metrics-server's current usage is used (one sample; treat as
 | `api_token` | none | Protects the API, Alertmanager webhook and `/mcp`; required on a non-local address |
 | `cors_origins` | none | Comma-separated |
 | `allow_writes` | `false` | Enables `/api/v1/fix` (verified in the background; poll `/api/v1/verify/{id}`) and the MCP `apply_fix` tool |
+| `allow_rbac_fixes` | `false` | Also allow the `grant` fix (Role + RoleBinding) from the API, Slack and MCP |
+| `auto_rollback_namespaces` | `[]` | Roll back a just-broken rollout automatically in these namespaces (`*` = all non-system); needs `allow_writes` ([auto-rollback](auto-rollback.md)) |
 | `github_repo` | — | `owner/repo` for incident issues ([tickets](tickets.md)) |
 | `github_token` | — | Token with Issues: read and write (`GITHUB_TOKEN` also works) |
 | `github_api_url` | `https://api.github.com` | GitHub Enterprise Server API URL |

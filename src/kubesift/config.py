@@ -66,6 +66,8 @@ class Settings(BaseModel):
     api_token: str | None = Field(default=None, repr=False)
     cors_origins: list[str] = Field(default_factory=list)
     allow_writes: bool = False
+    allow_rbac_fixes: bool = False  # also allow the `grant` fix (Role + RoleBinding) from the API, Slack and MCP
+    auto_rollback_namespaces: list[str] = Field(default_factory=list)  # see docs/auto-rollback.md; empty = off
     leader_election: bool = False  # several replicas: only the Lease holder runs background scans
     leader_namespace: str | None = None  # defaults to the pod's namespace
     scan_interval: int = 0  # seconds; 0 disables background scans

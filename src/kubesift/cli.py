@@ -389,12 +389,19 @@ def upgrade_check(
 
 @app.command()
 def fix(
-    action: str = typer.Argument(..., help="restart | rollback | scale | delete-pod"),
-    resource: str = typer.Argument(..., help="kind/name, e.g. deployment/checkout or pod/web-abc"),
+    action: str = typer.Argument(..., help="restart | rollback | scale | delete-pod | set-selector | set-memory | grant"),
+    resource: str = typer.Argument(..., help="kind/name: deploy/checkout, pod/web-abc, svc/web, sa/worker"),
     namespace: str = typer.Option("default", "--namespace", "-n"),
     replicas: int | None = typer.Option(None, "--replicas"),
     to_revision: int | None = typer.Option(None, "--to-revision",
                                            help="rollback: this revision (default: the previous different version)"),
+    selector: str | None = typer.Option(None, "--selector", help="set-selector: new labels, e.g. app=web,tier=api"),
+    match: str | None = typer.Option(None, "--match", help="set-selector: copy the selector of deploy/NAME"),
+    container: str | None = typer.Option(None, "--container", "-c", help="set-memory: the container"),
+    memory: str | None = typer.Option(None, "--memory", help="set-memory: the new limit, e.g. 512Mi"),
+    verb: str | None = typer.Option(None, "--verb", help="grant: e.g. list or get,list"),
+    grant_resource: str | None = typer.Option(None, "--resource", help="grant: e.g. secrets or pods/log"),
+    api_group: str = typer.Option("", "--api-group", help="grant: e.g. apps (empty = core)"),
     yes: bool = typer.Option(False, "--yes", "-y", help="Apply after a successful dry run without asking."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Only run the server-side dry run."),
     check: bool = typer.Option(True, "--verify/--no-verify",
@@ -403,10 +410,15 @@ def fix(
 ) -> None:
     """Apply a guarded fix: shows the plan, runs a server-side dry run, asks, applies, then verifies it worked.
 
+    \b
+    kubesift fix rollback deploy/checkout -n shop            previous different version (or --to-revision)
+    kubesift fix set-selector svc/web -n shop --match deploy/web
+    kubesift fix set-memory deploy/worker -n shop --memory 1Gi
+    kubesift fix grant sa/worker -n shop --verb list --resource secrets
+
     Exit codes: 0 fixed (or dry run ok), 3 still failing or not verified, 1 error or cancelled."""
     from kubesift.cluster.client import KubeClient, KubeError
-    from kubesift.remediate import execute, plan
-    from kubesift.verify import workload_of_pod
+    from kubesift.remediate import execute, plan, verification_target
 
     if "/" not in resource:
         _fail("use kind/name")
@@ -416,7 +428,12 @@ def fix(
     s = state.settings
     try:
         client = KubeClient(kubeconfig=s.kubeconfig, context=s.context, timeout=s.request_timeout)
-        p = plan(client, action, kind, namespace, name, replicas, to_revision)
+        labels = dict(kv.split("=", 1) for kv in selector.split(",") if "=" in kv) if selector else None
+        if selector and not labels:
+            raise ValueError("--selector takes key=value pairs, e.g. app=web")
+        p = plan(client, action, kind, namespace, name, replicas, to_revision, selector=labels, match=match,
+                 container=container, memory=memory, verbs=(verb or "").split(","), resource=grant_resource,
+                 api_group=api_group)
     except (ValueError, KubeError) as exc:
         _fail(str(exc))
     except Exception as exc:
@@ -434,19 +451,15 @@ def fix(
     if not yes and not typer.confirm("Apply this change to the cluster?", default=False):
         console.print("Cancelled.")
         raise typer.Exit(1)
-    # A deleted pod can't be looked up afterwards: find the workload that will recreate it first.
-    target = (kind, name)
-    if check and action == "delete-pod":
-        try:
-            target = workload_of_pod(client, namespace, name)
-        except (ValueError, KubeError) as exc:
-            console.print(Text(f"Will not verify: {exc}", style="yellow"))
-            check = False
+    # Decide what shows the result *before* applying (a deleted pod can't be looked up afterwards).
+    target = verification_target(client, p) if check else None
+    if check and target is None:
+        console.print(Text("Nothing to verify automatically for this change.", style="yellow"))
     try:
         console.print(Text(f"Result: {execute(client, p, False, store)}", style="bold green"))
     except KubeError as exc:
         _fail(exc.message)
-    if check:
+    if target:
         _verify_and_report(client, store, target[0], namespace, target[1], verify_timeout, 20, "text")
 
 

@@ -195,6 +195,24 @@
         },
         "allowWrites": {
           "type": "boolean"
+        },
+        "allowRbacFixes": {
+          "type": "boolean",
+          "description": "Allow the grant fix (Role + RoleBinding); needs allowWrites"
+        }
+      }
+    },
+    "autoRollback": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "namespaces": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(\\*|[a-z0-9]([-a-z0-9]*[a-z0-9])?)$"
+          },
+          "description": "Namespaces where a just-broken rollout is rolled back automatically"
         }
       }
     },

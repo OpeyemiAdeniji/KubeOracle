@@ -60,8 +60,18 @@ rbac:
   # Reading Secrets lets KubeSift check missing secret references, TLS expiry and Helm releases.
   # Secret VALUES are never stored or sent anywhere; only key names and certificate dates are kept.
   readSecrets: true
-  # Allow guarded fixes (restart / rollback / scale / delete pod) from the API and MCP server.
+  # Allow guarded fixes from the API, Slack and MCP server: restart, rollback, scale, delete pod, Service
+  # selector, memory limit. Every fix is dry-run first, audited and verified afterwards.
   allowWrites: false
+  # Also allow the `grant` fix (a namespaced Role + RoleBinding for one verb on one resource). KubeSift can only
+  # grant permissions it holds itself (Kubernetes blocks escalation), but keep this off unless you need it.
+  allowRbacFixes: false
+
+# Roll back a Deployment automatically when a rollout in the last 30 minutes broke it (crash loop, image pull,
+# config error, OOM kill, stuck rollout), then verify. Needs rbac.allowWrites and scan.interval > 0.
+# List the namespaces, or ["*"] for every non-system namespace. Empty = off (see docs/auto-rollback.md).
+autoRollback:
+  namespaces: []
 
 persistence:
   enabled: true
