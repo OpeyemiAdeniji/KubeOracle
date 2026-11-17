@@ -65,5 +65,5 @@ if __name__ == "__main__":
     version, dist = sys.argv[1], Path(sys.argv[2])
     if not version.startswith("v"):
         sys.exit("version must be the release tag, e.g. v2.1.6")
-    (dist / "sift.yaml").write_text(manifest(version, dist), encoding="utf-8")
+    (dist / "sift.yaml").write_text(manifest(version, dist), encoding="utf-8", newline="\n")
     print(dist / "sift.yaml")

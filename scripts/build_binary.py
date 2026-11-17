@@ -59,7 +59,8 @@ def pack(folder: Path) -> Path:
         with tarfile.open(out, "w:gz") as t:
             t.add(folder, arcname=NAME)
     digest = hashlib.sha256(out.read_bytes()).hexdigest()
-    (DIST / f"{out.name}.sha256").write_text(f"{digest}  {out.name}\n", encoding="utf-8")
+    # newline="\n": in text mode Windows writes \r\n, and `sha256sum -c` then can't find the file.
+    (DIST / f"{out.name}.sha256").write_text(f"{digest}  {out.name}\n", encoding="utf-8", newline="\n")
     return out
 
 
