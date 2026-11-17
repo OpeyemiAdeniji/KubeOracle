@@ -42,6 +42,9 @@ git push origin v2.0.0
 
 ## Verifying a release (what users and security teams run)
 
+Releases are signed with cosign 3 (Sigstore bundle format, stored as OCI referrers), so verify with cosign 3 or
+newer. The release workflow runs the same `cosign verify` right after signing and fails if it doesn't pass.
+
 ```bash
 cosign verify ghcr.io/opeyemiadeniji/kubesift:2.0.0 \
   --certificate-identity-regexp 'https://github.com/OpeyemiAdeniji/KubeSift/.github/workflows/release.yml@refs/tags/v.*' \

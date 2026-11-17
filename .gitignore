@@ -20,6 +20,7 @@ node_modules/
 # Python / tooling
 .venv/
 dist/
+build/
 .ruff_cache/
 .coverage
 *.egg-info/

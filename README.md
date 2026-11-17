@@ -29,6 +29,8 @@ the cluster unless you run `kubesift fix` and confirm.
 
    No pipx? `python -m pip install --user pipx && python -m pipx ensurepath`, then open a new terminal.
    `pip install "kubesift[all]"` in a virtualenv works too.
+   No Python at all? Download the standalone `kubectl-sift` for your OS from
+   [Releases](https://github.com/OpeyemiAdeniji/KubeSift/releases/latest) ([how](docs/krew.md)).
 
 2. **Check that kubectl reaches your cluster.** KubeSift uses the same kubeconfig and current context.
 
@@ -166,6 +168,7 @@ and `lint` takes `-o sarif` (GitHub code scanning). `--fail-on high` makes CI fa
 ## Docs
 
 - [All checks](docs/checks.md) · [Configuration](docs/configuration.md) · [MCP setup](docs/mcp.md) ·
+  [Standalone binary and krew](docs/krew.md) ·
   [Preflight](docs/preflight.md) · [Slack](docs/slack.md) · [Production deployment](docs/production.md) · [Architecture](docs/architecture.md) ·
   [Releasing](docs/releasing.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 

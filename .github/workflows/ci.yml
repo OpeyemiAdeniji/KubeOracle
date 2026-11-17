@@ -25,7 +25,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python: ["3.10", "3.11", "3.12", "3.13"]
+        python: ["3.10", "3.11", "3.12", "3.13", "3.14", "3.15"]  # the image runs the newest
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -43,7 +43,7 @@ jobs:
       - uses: actions/checkout@v7
       - name: actionlint
         run: |
-          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7
+          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash) 1.7.12
           ./actionlint -color
 
   action:
@@ -127,6 +127,50 @@ jobs:
           tags: kubesift:ci
           load: true
       - run: docker run --rm kubesift:ci version
+      - name: Every extra imports (the image has no shell or pip to fix things later)
+        run: docker run --rm --entrypoint python kubesift:ci -c "import kubesift.mcp_server, kubesift.server.app, anthropic, psycopg, uvicorn"
+      - name: Serves the way the chart runs it (uid 10001, read-only root, /data volume)
+        run: |
+          docker run -d --name ks --read-only --user 10001 -e KUBESIFT_API_TOKEN=ci -v ksdata:/data -p 8080:8080 kubesift:ci
+          for _ in $(seq 30); do curl -sf localhost:8080/healthz && break; sleep 1; done
+          curl -sf localhost:8080/healthz
+          test "$(curl -s -o /dev/null -w '%{http_code}' localhost:8080/api/v1/history)" = 401
+          docker rm -f ks
+      - name: No fixable high or critical vulnerabilities (Artifact Hub runs the same scanner)
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.69.3 image \
+            --scanners vuln,secret --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 kubesift:ci
+
+  binary:
+    # The standalone kubectl-sift (krew) must build and pass its smoke test before a release depends on it.
+    strategy:
+      matrix:
+        include:
+          - {os: linux, runner: ubuntu-latest, container: "quay.io/pypa/manylinux_2_28_x86_64"}
+          - {os: windows, runner: windows-latest}
+    runs-on: ${{ matrix.runner }}
+    container: ${{ matrix.container }}
+    steps:
+      - uses: actions/checkout@v7
+      - if: matrix.os == 'linux'
+        run: scripts/build_binary_manylinux.sh
+      - uses: actions/setup-python@v7
+        if: matrix.os != 'linux'
+        with:
+          python-version: "3.12"
+      - if: matrix.os != 'linux'
+        shell: bash
+        run: |
+          python -m pip install ".[anthropic]" "pyinstaller==6.22.3"
+          python scripts/build_binary.py
+      - name: The krew manifest is valid YAML with every field filled
+        if: matrix.os == 'linux'
+        run: |
+          for p in linux_arm64.tar.gz darwin_amd64.tar.gz darwin_arm64.tar.gz windows_amd64.zip; do
+            echo "$(printf 'ab%.0s' $(seq 32))  x" > "dist/kubectl-sift_$p.sha256"
+          done
+          /tmp/kubesift-build/bin/python scripts/krew_manifest.py v0.0.0 dist
+          /tmp/kubesift-build/bin/python -c "import yaml; m = yaml.safe_load(open('dist/sift.yaml')); assert len(m['spec']['platforms']) == 5 and all(len(p['sha256']) == 64 for p in m['spec']['platforms'])"
 
   e2e:
     runs-on: ubuntu-latest
