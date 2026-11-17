@@ -1,0 +1,19 @@
+version: 2
+updates:
+  # The image's base: a weekly PR moves both Chainguard digests together (build and runtime must share a
+  # Python version). CI's docker job rebuilds, smoke-tests and scans it before it can merge.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      base-image:
+        patterns: ["*"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]

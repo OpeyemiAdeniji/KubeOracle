@@ -100,11 +100,19 @@ def detect_changes(snap: Snapshot, window: timedelta = timedelta(hours=6)) -> li
         t = parse_time(meta(newest).get("creationTimestamp"))
         if not t or t < cutoff:
             continue
-        details = _template_diff(sets[-2], newest) if len(sets) > 1 else ["first revision"]
         prev = rev(sets[-2]) if len(sets) > 1 else None
+        if prev is not None:
+            details = _template_diff(sets[-2], newest)
+            summary = f"Deployment {name} rolled out revision {rev(newest)}" + (f": {details[0]}" if details else "")
+        elif rev(newest) <= 1:
+            details = ["new Deployment: no earlier version to compare with or roll back to"]
+            summary = f"Deployment {name} was created"
+        else:  # older ReplicaSets were cleaned up (revisionHistoryLimit), so the diff is unknown
+            details = ["earlier revisions are not kept (revisionHistoryLimit), so what changed is unknown"]
+            summary = f"Deployment {name} rolled out revision {rev(newest)}"
         changes.append(Change(
             time=t, kind="rollout", resource=ResourceRef(kind="Deployment", name=name, namespace=ns),
-            summary=f"Deployment {name} rolled out revision {rev(newest)}" + (f": {details[0]}" if details else ""),
+            summary=summary,
             details=details,
             rollback_command=f"kubectl rollout undo deployment/{name} -n {ns}" + (f" --to-revision={prev}" if prev else "")
             if prev else None,

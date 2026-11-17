@@ -6,16 +6,45 @@ Write tools are only registered when allow_writes is enabled, and default to a s
 
 from __future__ import annotations
 
+import functools
 import json
-from typing import Any
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
 from kubesift import __version__
+from kubesift.cluster.client import ClusterAccessError, KubeError
 from kubesift.config import Settings
+from kubesift.lint import LintError
 
-READ_ONLY = ToolAnnotations(readOnlyHint=True, openWorldHint=False)
+READ_ONLY = ToolAnnotations(read_only_hint=True, open_world_hint=False)
+
+F = TypeVar("F", bound=Callable[..., Any])
+
+# Failures we expect and can explain: bad input, an unreachable cluster, an API refusal, unreadable YAML.
+# The SDK hides the text of any other exception from the model ("Error executing tool diagnose"), so these
+# are re-raised as ToolError: the call is marked is_error and the assistant reads why and what to do.
+EXPLAINED = (ValueError, ClusterAccessError, KubeError, LintError, FileNotFoundError)
+
+
+def explained(fn: F) -> F:
+    @functools.wraps(fn)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        try:
+            return fn(*args, **kwargs)
+        except EXPLAINED as exc:
+            raise ToolError(str(exc)) from exc
+    return wrapper  # type: ignore[return-value]
+
+
+def _found(result: Any) -> Any:
+    """Turn the engine's {"error": ...} answer (not found, no history) into a failed tool call."""
+    if isinstance(result, dict) and set(result) == {"error"}:
+        raise ToolError(result["error"])
+    return result
 
 INSTRUCTIONS = """KubeSift reads a Kubernetes cluster and returns evidence-backed findings.
 Start with `diagnose` (optionally scoped to a namespace), then use `explain_resource` on the workloads it names,
@@ -53,6 +82,7 @@ def build_server(settings: Settings) -> MCPServer:
     store = open_store(settings)
 
     @server.tool(annotations=READ_ONLY)
+    @explained
     def diagnose(namespace: str | None = None, include_risks: bool = False, context: str | None = None) -> str:
         """Scan the cluster (or one namespace) and return problems grouped into incidents, with evidence,
         likely triggering changes and suggested fixes. Set include_risks to also list configuration risks."""
@@ -61,13 +91,15 @@ def build_server(settings: Settings) -> MCPServer:
         return json.dumps(_compact_report(report, include_risks), default=str)
 
     @server.tool(name="explain_resource", annotations=READ_ONLY)
+    @explained
     def explain_resource_tool(kind: str, name: str, namespace: str | None = None, context: str | None = None) -> str:
         """Status, pods, recent events, redacted error logs, findings and changes for one resource.
         kind: pod, deployment, statefulset, daemonset, service, ingress, job, cronjob, node, pvc..."""
         snap = snapshot_for(settings, namespace if kind.lower() not in ("node", "no") else None, context)
-        return json.dumps(explain_resource(settings, snap, kind, namespace, name), default=str)
+        return json.dumps(_found(explain_resource(settings, snap, kind, namespace, name)), default=str)
 
     @server.tool(annotations=READ_ONLY)
+    @explained
     def recent_changes(namespace: str | None = None, since: str = "24h", context: str | None = None) -> str:
         """Rollouts (with image/env diffs), ConfigMap/Secret edits, Helm upgrades, Argo CD syncs, scaling and node
         events in the window (e.g. 30m, 6h, 2d). Includes rollback commands."""
@@ -75,12 +107,14 @@ def build_server(settings: Settings) -> MCPServer:
         return json.dumps([c.model_dump(mode="json") for c in detect_changes(snap, parse_duration(since))])
 
     @server.tool(annotations=READ_ONLY)
+    @explained
     def cost_report(namespace: str | None = None, context: str | None = None) -> str:
         """Right-sizing suggestions and waste (over-requested CPU/memory, idle GPUs, unused volumes, idle LBs)."""
         from kubesift.cost import cost_report as build
         return json.dumps(build(snapshot_for(settings, namespace, context, with_logs=False), settings))
 
     @server.tool(annotations=READ_ONLY)
+    @explained
     def upgrade_check(target_version: str, context: str | None = None) -> str:
         """What blocks upgrading to target_version (e.g. 1.36): removed APIs, PDBs that block drains,
         kubelet skew, containerd 1.x, retired ingress-nginx, deprecated features."""
@@ -88,13 +122,15 @@ def build_server(settings: Settings) -> MCPServer:
         return json.dumps(upgrade_report(snapshot_for(settings, None, context, with_logs=False), settings,
                                          target_version), default=str)
 
-    @server.tool(annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False, idempotentHint=True))
+    @server.tool(annotations=ToolAnnotations(read_only_hint=True, open_world_hint=False, idempotent_hint=True))
+    @explained
     def lint_manifests(manifests_yaml: str, target_version: str | None = None) -> str:
         """Check Kubernetes YAML (multi-document) for reliability, security and removed-API problems before it ships."""
         from kubesift.lint import lint_text
         return json.dumps([f.model_dump(mode="json") for f in lint_text(manifests_yaml, settings, target_version)])
 
     @server.tool(annotations=READ_ONLY)
+    @explained
     def preflight_manifests(manifests_yaml: str, namespace: str = "default", context: str | None = None) -> str:
         """Check Kubernetes YAML against the LIVE cluster before deploying: missing Secrets/ConfigMaps/keys,
         namespaces, StorageClasses, capacity and quota, PDBs, removed env vars, and memory limits below current usage."""
@@ -105,6 +141,7 @@ def build_server(settings: Settings) -> MCPServer:
         return json.dumps(res.to_dict(), default=str)
 
     @server.tool(annotations=READ_ONLY)
+    @explained
     def cluster_diff(since: str = "1h", namespace: str | None = None, context: str | None = None) -> str:
         """Time travel: what differs between the cluster now and `since` ago (needs stored history from the
         in-cluster service or `kubesift snapshot record`)."""
@@ -113,10 +150,12 @@ def build_server(settings: Settings) -> MCPServer:
         current = digest(snapshot_for(settings, namespace, context, with_logs=False))
         earlier = store.digest_before(current["cluster"], now() - parse_duration(since))
         if earlier is None:
-            return json.dumps({"error": f"no stored history from {since} ago"})
+            raise ToolError(f"no stored history from {since} ago; history comes from the in-cluster service "
+                            "or `kubesift snapshot record`")
         return json.dumps({"from": earlier.get("time"), "to": current.get("time"), "changes": diff(earlier, current)})
 
     @server.tool(annotations=READ_ONLY)
+    @explained
     def draft_postmortem(namespace: str | None = None, since: str = "24h", context: str | None = None) -> str:
         """Draft a blameless postmortem (impact, timeline, root cause, triggering change, action items) as Markdown."""
         from kubesift.postmortem import build, to_markdown
@@ -125,20 +164,23 @@ def build_server(settings: Settings) -> MCPServer:
         return to_markdown(build(report, s, store.list_audit(200)))
 
     @server.tool(annotations=READ_ONLY)
+    @explained
     def list_checks() -> str:
         """Every check KubeSift runs, with severity and what it detects."""
         from kubesift.checks import REGISTRY
         return json.dumps([{"id": c.id, "title": c.title, "severity": c.severity.value, "category": c.category.value,
                             "description": c.description} for c in REGISTRY.values()])
 
-    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+    @server.tool(annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False, open_world_hint=False))
+    @explained
     def add_team_note(check_id: str, note: str, target: str | None = None) -> str:
         """Record what fixed a problem (shown next to matching findings in future investigations)."""
         store.add_note(check_id, note, target, author="mcp")
         return "saved"
 
     if settings.allow_writes:
-        @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, openWorldHint=False))
+        @server.tool(annotations=ToolAnnotations(read_only_hint=False, destructive_hint=True, open_world_hint=False))
+        @explained
         def apply_fix(action: str, kind: str, namespace: str, name: str, replicas: int | None = None,
                       dry_run: bool = True) -> str:
             """Guarded remediation: restart | rollback | scale | delete-pod. Always run with dry_run=true first and

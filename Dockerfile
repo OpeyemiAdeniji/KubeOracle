@@ -1,18 +1,23 @@
 # syntax=docker/dockerfile:1
-FROM python:3.12-slim AS build
+# Chainguard's Wolfi Python images: rebuilt daily from patched sources, no shell or package manager in the
+# runtime image, so vulnerability scans stay clean. Both stages must have the same Python version (packages
+# are installed for it), so Dependabot updates the two digests together (see .github/dependabot.yml).
+FROM cgr.dev/chainguard/python:latest-dev@sha256:50bef4bfe98ea2f3c8c146a04847c8857e0afb1c8803e2047f140f10c028a7ee AS build
+USER root
 WORKDIR /src
 COPY pyproject.toml README.md LICENSE ./
 COPY src ./src
-RUN pip install --no-cache-dir build && python -m build --wheel --outdir /dist
+# Install into the interpreter's own prefix (/usr), not a venv: no pip ends up in the image, and scanners
+# treat the files as installed packages rather than loose source.
+RUN pip install --no-cache-dir --no-compile --root-user-action=ignore --prefix=/install ".[all]" && mkdir /data
 
-FROM python:3.12-slim
+FROM cgr.dev/chainguard/python:latest@sha256:6a467605cd347cb7af8404af3648d01c2b39a967c342b70bbd5ef39dd0b74f5c
 LABEL org.opencontainers.image.source="https://github.com/OpeyemiAdeniji/KubeSift" \
       org.opencontainers.image.description="Evidence-based Kubernetes troubleshooting" \
       org.opencontainers.image.licenses="Apache-2.0"
-ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 KUBESIFT_DATA_DIR=/data
-COPY --from=build /dist/*.whl /tmp/
-RUN pip install --no-cache-dir "$(ls /tmp/*.whl)[all]" && rm /tmp/*.whl \
- && useradd --uid 10001 --create-home kubesift && mkdir /data && chown 10001 /data
+COPY --from=build /install /usr
+COPY --from=build --chown=10001:10001 /data /data
+ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 KUBESIFT_DATA_DIR=/data HOME=/data
 USER 10001
 VOLUME /data
 EXPOSE 8080

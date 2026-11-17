@@ -75,6 +75,11 @@ put it behind oauth2-proxy (see [production.md](production.md#access-and-authent
 
 All tools except `add_team_note` and `apply_fix` are marked read-only.
 
+When a call can't be answered (the cluster is unreachable or rejects the login, the resource doesn't exist, a
+duration or version is written wrong, the YAML doesn't parse), the tool returns an MCP error with the reason and,
+where there is one, what to do, so the assistant can tell you or retry with better input. Unexpected internal
+errors are reported without their details.
+
 ## Example prompts
 
 - "Use kubesift to find out why checkout is down in the shop namespace and tell me what changed before it broke."
