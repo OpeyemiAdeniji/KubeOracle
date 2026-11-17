@@ -51,8 +51,8 @@ and the [production guide](https://github.com/OpeyemiAdeniji/KubeSift/blob/main/
 
 ## Verify the image
 
-Images and this chart are signed with cosign, keyless, by the release workflow. From 2.1.6 the signatures use
-Sigstore's bundle format, so verify with cosign 3 or newer (replace `VERSION`, e.g. `2.1.6`):
+Images and this chart are signed with cosign, keyless, by the release workflow. From 2.1.7 the signatures use
+Sigstore's bundle format, so verify with cosign 3 or newer (replace `VERSION`, e.g. `2.1.7`):
 
 ```bash
 cosign verify ghcr.io/opeyemiadeniji/kubesift:VERSION \

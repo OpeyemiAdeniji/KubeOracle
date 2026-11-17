@@ -45,6 +45,8 @@ jobs:
         run: |
           bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash) 1.7.12
           ./actionlint -color
+      - name: Every action version used exists (actionlint does not check; v2.1.6's release failed on this)
+        run: scripts/check_action_refs.sh
 
   action:
     # Runs the published GitHub Action (action.yml) the way users do, so a broken action is caught before release.
