@@ -2,8 +2,8 @@ apiVersion: v2
 name: kubesift
 description: Evidence-based Kubernetes troubleshooting service (dashboard, API, Alertmanager receiver, background scans)
 type: application
-version: 2.1.6
-appVersion: "2.1.6"
+version: 2.1.7
+appVersion: "2.1.7"
 home: https://opeyemiadeniji.github.io/KubeSift/
 sources:
   - https://github.com/OpeyemiAdeniji/KubeSift
@@ -19,7 +19,7 @@ annotations:
   artifacthub.io/category: monitoring-logging
   artifacthub.io/images: |
     - name: kubesift
-      image: ghcr.io/opeyemiadeniji/kubesift:2.1.6
+      image: ghcr.io/opeyemiadeniji/kubesift:2.1.7
   artifacthub.io/links: |
     - name: Website
       url: https://opeyemiadeniji.github.io/KubeSift/
