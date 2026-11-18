@@ -78,17 +78,43 @@ spec:
             {{- end }}
             - name: KUBESIFT_NOTIFY_MIN_SEVERITY
               value: {{ .Values.scan.notifyMinSeverity | quote }}
+            {{- with .Values.namespaces.exclude }}
+            - name: KUBESIFT_NAMESPACE_EXCLUDE
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.namespaces.only }}
+            - name: KUBESIFT_RESTRICT_NAMESPACE
+              value: {{ . | quote }}
+            {{- end }}
+            - name: KUBESIFT_DASHBOARD_LOGS
+              value: {{ .Values.dashboard.logs | quote }}
             - name: KUBESIFT_ALLOW_WRITES
               value: {{ .Values.rbac.allowWrites | quote }}
+            - name: KUBESIFT_ALLOW_RBAC_FIXES
+              value: {{ and .Values.rbac.allowWrites .Values.rbac.allowRbacFixes | quote }}
+            {{- with .Values.autoRollback.namespaces }}
+            - name: KUBESIFT_AUTO_ROLLBACK_NAMESPACES
+              value: {{ join "," . | quote }}
+            {{- end }}
             {{- with .Values.slack.allowedUsers }}
             - name: KUBESIFT_SLACK_ALLOWED_USERS
               value: {{ join "," . | quote }}
             {{- end }}
+            {{- with .Values.tickets.githubRepo }}
+            - name: KUBESIFT_GITHUB_REPO
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.tickets.githubApiUrl }}
+            - name: KUBESIFT_GITHUB_API_URL
+              value: {{ . | quote }}
+            {{- end }}
+            - name: KUBESIFT_TICKET_ON_ALERT
+              value: {{ .Values.tickets.onAlert | quote }}
             {{- with .Values.notifications.webhookUrl }}
             - name: KUBESIFT_WEBHOOK_URL
               value: {{ . | quote }}
             {{- end }}
-            {{- range $env, $key := dict "KUBESIFT_API_TOKEN" "api-token" "ANTHROPIC_API_KEY" "anthropic-api-key" "OPENAI_API_KEY" "openai-api-key" "OPENROUTER_API_KEY" "openrouter-api-key" "KUBESIFT_SLACK_WEBHOOK_URL" "slack-webhook-url" "KUBESIFT_TEAMS_WEBHOOK_URL" "teams-webhook-url" "KUBESIFT_SLACK_SIGNING_SECRET" "slack-signing-secret" }}
+            {{- range $env, $key := dict "KUBESIFT_API_TOKEN" "api-token" "ANTHROPIC_API_KEY" "anthropic-api-key" "OPENAI_API_KEY" "openai-api-key" "OPENROUTER_API_KEY" "openrouter-api-key" "KUBESIFT_SLACK_WEBHOOK_URL" "slack-webhook-url" "KUBESIFT_TEAMS_WEBHOOK_URL" "teams-webhook-url" "KUBESIFT_SLACK_SIGNING_SECRET" "slack-signing-secret" "KUBESIFT_GITHUB_TOKEN" "github-token" }}
             - name: {{ $env }}
               valueFrom:
                 secretKeyRef:

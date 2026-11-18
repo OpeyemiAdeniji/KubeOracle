@@ -61,7 +61,30 @@ class FixRequest(BaseModel):
     namespace: str
     name: str
     replicas: int | None = None
+    to_revision: int | None = None
+    selector: dict[str, str] | None = None
+    match: str | None = None
+    container: str | None = None
+    memory: str | None = None
+    verbs: list[str] | None = None
+    resource: str | None = None
+    api_group: str = ""
     dry_run: bool = True
+    verify: bool = Field(True, description="After a real apply, verify in the background; poll /api/v1/verify/{id}")
+
+
+class TicketRequest(BaseModel):
+    namespace: str | None = None
+    incident: int = Field(1, ge=1, description="1 = the most severe incident")
+    markdown_only: bool = Field(False, description="Return the ticket text instead of opening a GitHub issue")
+
+
+class VerifyRequest(BaseModel):
+    kind: str = Field(description="deployment, statefulset, daemonset or pod")
+    namespace: str
+    name: str
+    timeout: int = Field(180, ge=10, le=900)
+    settle: int = Field(20, ge=0, le=300)
 
 
 def create_app(settings: Settings) -> FastAPI:
@@ -91,6 +114,10 @@ def create_app(settings: Settings) -> FastAPI:
 
     @app.exception_handler(ValueError)
     async def bad_input(_: Request, exc: ValueError) -> Any:
+        from kubesift.config import ScopeError
+        if isinstance(exc, ScopeError):
+            from fastapi.responses import JSONResponse
+            return JSONResponse({"detail": str(exc)}, status_code=403)
         from fastapi.responses import JSONResponse
         return JSONResponse({"detail": str(exc)}, status_code=400)  # e.g. since=abc, invalid names
     store = open_store(settings)
@@ -116,6 +143,7 @@ def create_app(settings: Settings) -> FastAPI:
             check_name(namespace, "namespace")
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        namespace = settings.scope(namespace)  # out of scope -> 403, not "cannot reach the cluster"
         key = (namespace, context, with_logs)
         now_t = time.monotonic()
         for k in [k for k, v in list(cache.items()) if now_t - v[0] > settings.cache_ttl]:
@@ -144,12 +172,93 @@ def create_app(settings: Settings) -> FastAPI:
 
     @app.get("/", include_in_schema=False)
     def index() -> FileResponse:
-        return FileResponse(STATIC / "index.html")
+        # no-cache: after an upgrade the browser must fetch the new dashboard, not run the old one
+        return FileResponse(STATIC / "index.html", headers={"Cache-Control": "no-cache"})
+
+    @app.get("/api/v1/map", dependencies=[Depends(auth)])
+    def incident_map(namespace: str, kind: str, name: str) -> dict[str, Any]:
+        """The incident map: what the resource is connected to, with the broken link marked."""
+        from kubesift.topology import build_map
+        from kubesift.util import check_name
+        try:
+            check_name(name)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        kinds = {"deployment": "Deployment", "statefulset": "StatefulSet", "daemonset": "DaemonSet",
+                 "service": "Service", "pod": "Pod"}
+        if kind.lower() not in kinds:
+            raise HTTPException(status_code=400, detail="kind must be Deployment, StatefulSet, DaemonSet, Service or Pod")
+        return build_map(snap(namespace, None, with_logs=False), kinds[kind.lower()], namespace, name)
+
+    @app.get("/api/v1/logs", dependencies=[Depends(auth)])
+    def pod_logs(namespace: str, pod: str, container: str | None = None, previous: bool = False,
+                 tail: int = 200) -> dict[str, Any]:
+        """A pod's recent log lines, redacted like everything else KubeSift shows (dashboard_logs=false disables)."""
+        from kubesift.cluster.client import KubeError
+        from kubesift.redact import redact
+        from kubesift.util import check_name
+        settings.scope(namespace)
+        if not settings.dashboard_logs:
+            raise HTTPException(status_code=403, detail="log viewing is disabled (dashboard_logs=false)")
+        try:
+            check_name(namespace, "namespace")
+            check_name(pod)
+            check_name(container, "container")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        client = KubeClient(kubeconfig=settings.kubeconfig, context=settings.context, timeout=settings.request_timeout)
+        try:
+            spec = client.get(f"/api/v1/namespaces/{namespace}/pods/{pod}").get("spec") or {}
+            names = [c.get("name", "") for c in (spec.get("initContainers") or []) + (spec.get("containers") or [])]
+            if container is None:  # the first container that is not an init container
+                container = next((c.get("name") for c in spec.get("containers") or []), None)
+            if container not in names:
+                raise HTTPException(status_code=400, detail=f"container must be one of: {', '.join(names)}")
+            text = client.pod_logs(namespace, pod, container, previous, tail=max(1, min(tail, 1000)))
+        except KubeError as exc:
+            raise HTTPException(status_code=exc.status if exc.status in (400, 403, 404) else 502,
+                                detail=exc.message) from exc
+        return {"pod": pod, "container": container, "containers": names, "previous": previous,
+                "lines": [redact(line[:2000]) for line in (text or "").splitlines()]}
+
+    @app.get("/api/v1/stream", dependencies=[Depends(auth)])
+    async def stream(request: Request) -> Any:
+        """Server-sent events: the latest background scan, whenever a new one lands (any replica's, via the store)."""
+        import asyncio
+        import json as _json
+
+        from fastapi.responses import StreamingResponse
+
+        def latest() -> tuple[str | None, Report | None]:
+            if state["last_report"] is not None:
+                return str(state["last_scan"]), state["last_report"]
+            rows = [r for r in store.list_reports(20) if r["source"] == "scan"]  # another replica scans
+            return (rows[0]["id"], store.get_report(rows[0]["id"])) if rows else (None, None)
+
+        async def events() -> Any:
+            if not settings.scan_interval:
+                yield "data: " + _json.dumps({"live": False, "reason": "background scans are off "
+                                              "(set scan_interval / scan.interval)"}) + "\n\n"
+                return
+            seen, quiet = None, 0
+            while not await request.is_disconnected():
+                key, report = await asyncio.to_thread(latest)
+                if report is not None and key != seen:
+                    seen, quiet = key, 0
+                    yield "data: " + _json.dumps(_live_payload(report), default=str) + "\n\n"
+                elif (quiet := quiet + 1) >= 8:
+                    quiet = 0
+                    yield ": keep-alive\n\n"
+                await asyncio.sleep(2)
+
+        return StreamingResponse(events(), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
     @app.get("/api/v1/info", dependencies=[Depends(auth)])
     def info() -> dict[str, Any]:
         return {"version": __version__, "llm": settings.resolved_provider(), "model": settings.resolved_model(),
                 "allow_writes": settings.allow_writes, "scan_interval": settings.scan_interval,
+                "dashboard_logs": settings.dashboard_logs, "tickets": bool(settings.github_repo),
                 "last_scan": state["last_scan"], "leader": state["elector"].is_leader,
                 "storage": "postgresql" if store.postgres else "sqlite", "mcp": mcp_asgi is not None}
 
@@ -238,13 +347,94 @@ def create_app(settings: Settings) -> FastAPI:
         from kubesift.remediate import execute, plan
         if not req.dry_run and not settings.allow_writes:
             raise HTTPException(status_code=403, detail="writes are disabled (set KUBESIFT_ALLOW_WRITES=true)")
+        from kubesift.remediate import verification_target
+        settings.scope(req.namespace)
+        if req.action == "grant" and not settings.allow_rbac_fixes:
+            raise HTTPException(status_code=403, detail="RBAC fixes are disabled (set KUBESIFT_ALLOW_RBAC_FIXES=true)")
         client = KubeClient(kubeconfig=settings.kubeconfig, context=settings.context, timeout=settings.request_timeout)
+        target: tuple[str, str] | None = None
         try:
-            p = plan(client, req.action, req.kind, req.namespace, req.name, req.replicas)
+            p = plan(client, req.action, req.kind, req.namespace, req.name, req.replicas, req.to_revision,
+                     selector=req.selector, match=req.match, container=req.container, memory=req.memory,
+                     verbs=req.verbs, resource=req.resource, api_group=req.api_group)
+            if req.verify and not req.dry_run:
+                target = verification_target(client, p)  # before applying: a deleted pod can't be looked up after
             result = execute(client, p, req.dry_run, store, actor="api")
         except (ValueError, KubeError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        return {"plan": p.description, "kubectl": p.kubectl, "dry_run": req.dry_run, "result": result}
+        out: dict[str, Any] = {"plan": p.description, "kubectl": p.kubectl, "dry_run": req.dry_run, "result": result}
+        if target:
+            out["verify_id"] = start_verify(VerifyRequest(kind=target[0], namespace=req.namespace, name=target[1]))
+        return out
+
+    # Verification runs in the background (a rollout can take minutes, longer than most ingress timeouts).
+    # Results are kept in memory on the replica that ran them, and written to the shared audit log.
+    verifications: dict[str, dict[str, Any]] = {}
+
+    def start_verify(req: VerifyRequest) -> str:
+        import uuid
+
+        from kubesift.verify import verify
+
+        vid = uuid.uuid4().hex[:12]
+        verifications[vid] = {"id": vid, "status": "running", "target": f"{req.kind}/{req.namespace}/{req.name}"}
+        while len(verifications) > 200:
+            verifications.pop(next(iter(verifications)))
+
+        def run() -> None:
+            try:
+                c = KubeClient(kubeconfig=settings.kubeconfig, context=settings.context, timeout=settings.request_timeout)
+                v = verify(settings, c, req.kind, req.namespace, req.name, timeout=req.timeout, settle=req.settle)
+                verifications[vid] = {"id": vid, **v.to_dict()}
+                store.audit("verify", v.target, False, f"{v.status}: {v.summary}", "api")
+            except Exception as exc:  # report, don't crash the thread
+                verifications[vid] = {"id": vid, "status": "error", "target": verifications[vid]["target"],
+                                      "summary": str(exc), "ok": False}
+        threading.Thread(target=run, daemon=True, name=f"verify-{vid}").start()
+        return vid
+
+    @app.post("/api/v1/verify", dependencies=[Depends(auth)], status_code=202)
+    def verify_start(req: VerifyRequest) -> dict[str, Any]:
+        """Check that a fix worked (after `fix`, kubectl, Helm or a GitOps sync). Poll GET /api/v1/verify/{id}."""
+        from kubesift.util import check_name
+        from kubesift.verify import KINDS
+        try:
+            check_name(req.namespace, "namespace")
+            check_name(req.name)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        settings.scope(req.namespace)
+        if req.kind.lower() not in KINDS:
+            raise HTTPException(status_code=400, detail="kind must be deployment, statefulset, daemonset or pod")
+        return {"id": start_verify(req), "status": "running"}
+
+    @app.get("/api/v1/verify/{vid}", dependencies=[Depends(auth)])
+    def verify_status(vid: str) -> dict[str, Any]:
+        if vid not in verifications:
+            raise HTTPException(status_code=404, detail="unknown id (results live on the replica that ran them; "
+                                                        "see /api/v1/audit-log)")
+        return verifications[vid]
+
+    @app.post("/api/v1/tickets", dependencies=[Depends(auth)])
+    def open_ticket(req: TicketRequest) -> dict[str, Any]:
+        """Open a GitHub issue for incident N of a fresh investigation (or comment on its open issue)."""
+        from kubesift.tickets import TicketError, incident_markdown, open_github_issue
+        from kubesift.util import check_name
+        try:
+            check_name(req.namespace, "namespace")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        report = investigate(settings, snap(req.namespace, None), use_llm=False, store=store)
+        if not 1 <= req.incident <= len(report.incidents):
+            raise HTTPException(status_code=404, detail=f"no incident {req.incident} ({len(report.incidents)} found)")
+        inc = report.incidents[req.incident - 1]
+        if req.markdown_only:
+            title, body = incident_markdown(report, inc)
+            return {"title": title, "body": body}
+        try:
+            return open_github_issue(settings, report, inc)
+        except TicketError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @app.get("/api/v1/audit-log", dependencies=[Depends(auth)])
     def audit_log() -> list[dict[str, Any]]:
@@ -354,11 +544,13 @@ def create_app(settings: Settings) -> FastAPI:
         body = await _slack_verified(request)
         payload = _json.loads(parse_qs(body.decode()).get("payload", ["{}"])[0])
         actions = payload.get("actions") or []
-        if not actions or actions[0].get("action_id") != "sift_fix":
+        action_id = actions[0].get("action_id") if actions else None
+        if action_id not in ("sift_fix", "sift_ticket"):
             return {}
         value = _json.loads(actions[0].get("value") or "{}")
         user = (payload.get("user") or {}).get("id", "")
-        background.add_task(_slack_fix, settings, store, value, user, payload.get("response_url", ""))
+        task = _slack_fix if action_id == "sift_fix" else _slack_ticket
+        background.add_task(task, settings, store, value, user, payload.get("response_url", ""))
         return {}
 
     @app.get("/metrics", include_in_schema=False)
@@ -406,8 +598,39 @@ def _alert_investigation_locked(settings: Settings, store: Store, namespaces: li
             problems = [f for f in report.findings if f.kind == "problem"]
             title = f"Alert {alerts} in {ns or 'cluster'}: " + (report.diagnosis.summary[:120] if report.diagnosis else "")
             notify.send(settings, report, problems or report.findings[:3], title=title)
+            _auto_tickets(settings, report)
         except Exception as exc:
             log.warning("alert investigation failed for %s: %s", ns, exc)
+
+
+def _live_payload(report: Report) -> dict[str, Any]:
+    """What the dashboard's live mode needs from a scan: incidents, counts, when."""
+    return {
+        "live": True, "cluster": report.cluster, "namespace": report.namespace, "time": report.collected_at,
+        "counts": report.counts(),
+        "incidents": [{"id": i.id, "title": i.title, "severity": i.severity.value, "layer": i.layer,
+                       "root": i.root.model_dump(), "message": i.findings[0].message if i.findings else "",
+                       "trigger": i.likely_trigger.summary if i.likely_trigger else None,
+                       "rollback": i.likely_trigger.rollback_command if i.likely_trigger else None,
+                       "findings": len(i.findings)} for i in report.incidents[:50]],
+    }
+
+
+def _auto_tickets(settings: Settings, report: Report, fresh: set[str] | None = None) -> None:
+    """ticket_on_alert: one GitHub issue per urgent incident (a comment if it is already open)."""
+    if not (settings.ticket_on_alert and settings.github_repo):
+        return
+    from kubesift.tickets import open_github_issue
+    threshold = Severity.parse(settings.notify_min_severity).rank
+    for inc in report.incidents[:5]:
+        if inc.severity.rank < threshold:
+            continue
+        if fresh is not None and not any(f.fingerprint in fresh for f in inc.findings):
+            continue  # nothing new in this incident since the last scan
+        try:
+            open_github_issue(settings, report, inc)
+        except Exception as exc:
+            log.warning("could not open a GitHub issue for %s: %s", inc.title, exc)
 
 
 def _scan_loop(settings: Settings, store: Store, state: dict[str, Any]) -> None:
@@ -421,6 +644,13 @@ def _scan_loop(settings: Settings, store: Store, state: dict[str, Any]) -> None:
             report = investigate(settings, snap, use_llm=False, window=timedelta(hours=1), store=store)
             state["last_report"] = report
             state["last_scan"] = int(time.time())
+            if settings.allow_writes and settings.auto_rollback_namespaces:
+                from kubesift import autorollback
+                client = KubeClient(kubeconfig=settings.kubeconfig, context=settings.context,
+                                    timeout=settings.request_timeout)
+                for r in autorollback.run(settings, store, report, client):
+                    notify.send(settings, report, r.incident.findings if r.incident else report.findings[:3],
+                                title=autorollback.message(r)[:150])
             try:
                 from kubesift.timetravel import digest
                 store.save_digest(digest(snap))  # history for `kubesift diff --since` / time travel
@@ -432,6 +662,7 @@ def _scan_loop(settings: Settings, store: Store, state: dict[str, Any]) -> None:
                 report.diagnosis = llm_explain(settings, report, use_llm=True)
                 store.save_report(report, source="scan", retention_days=settings.history_days)
                 notify.send(settings, report, fresh)
+                _auto_tickets(settings, report, {f.fingerprint for f in fresh})
         except Exception as exc:
             log.warning("background scan failed: %s", exc)
         time.sleep(settings.scan_interval)
@@ -457,7 +688,7 @@ def _slack_work(settings: Settings, store: Store, verb: str, args: list[str], re
             ns = args[0] if args else None
             report = investigate(settings, snapshot_for(settings, ns), use_llm=True, store=store, include_risks=False)
             store.save_report(report, source="slack", retention_days=settings.history_days)
-            _slack_post(response_url, slack.report_blocks(report, f"Diagnosis: {ns or 'all namespaces'}"), "KubeSift diagnosis")
+            _slack_post(response_url, slack.report_blocks(report, f"Diagnosis: {ns or 'all namespaces'}", tickets=bool(settings.github_repo)), "KubeSift diagnosis")
         elif verb == "why":
             if not args:
                 _slack_post(response_url, [{"type": "section", "text": {"type": "mrkdwn", "text": slack.HELP}}], "help")
@@ -483,6 +714,25 @@ def _slack_work(settings: Settings, store: Store, verb: str, args: list[str], re
         _slack_post(response_url, [{"type": "section", "text": {"type": "mrkdwn", "text": f":x: {exc}"}}], "KubeSift error")
 
 
+def _slack_ticket(settings: Settings, store: Store, value: dict[str, Any], user: str, response_url: str) -> None:
+    """The "Open GitHub issue" button: re-investigate (state may have changed) and open/update the issue."""
+    from kubesift.tickets import open_github_issue
+    from kubesift.util import check_name
+    try:
+        ns = value.get("namespace")
+        check_name(ns, "namespace")
+        report = investigate(settings, snapshot_for(settings, ns), use_llm=False, store=store)
+        n = int(value.get("incident", 1))
+        if not 1 <= n <= len(report.incidents):
+            raise ValueError("that incident is no longer active")
+        r = open_github_issue(settings, report, report.incidents[n - 1])
+        verb = "Opened" if r["created"] else "Updated open"
+        text = f":ticket: {verb} issue <{r['url']}|#{r['number']}> (requested by <@{user}>)"
+    except Exception as exc:
+        text = f":x: Could not open the issue: {exc}"
+    _slack_post(response_url, [{"type": "section", "text": {"type": "mrkdwn", "text": text}}], "KubeSift ticket")
+
+
 def _slack_fix(settings: Settings, store: Store, value: dict[str, Any], user: str, response_url: str) -> None:
     from kubesift import slack
     from kubesift.cluster.client import KubeError
@@ -490,11 +740,26 @@ def _slack_fix(settings: Settings, store: Store, value: dict[str, Any], user: st
     # Applying from Slack needs both allow_writes and the user on an explicit allowlist (empty list = nobody).
     may_apply = bool(settings.allow_writes and user and user in settings.slack_allowed_users)
     dry_run = bool(value.get("dry_run", True)) or not may_apply
+    from kubesift.remediate import verification_target
+    from kubesift.verify import verify
+    target: tuple[str, str] | None = None
     try:
         client = KubeClient(kubeconfig=settings.kubeconfig, context=settings.context, timeout=settings.request_timeout)
         p = plan(client, value["action"], value["kind"], value["namespace"], value["name"], value.get("replicas"))
+        if not dry_run:
+            target = verification_target(client, p)
         result = execute(client, p, dry_run, store, actor=f"slack:{user}")
         blocks = slack.fix_result_blocks(p.description, p.kubectl, result, dict(value, dry_run=dry_run), may_apply)
     except (KubeError, ValueError, KeyError) as exc:
         blocks = [{"type": "section", "text": {"type": "mrkdwn", "text": f":x: {exc}"}}]
+        target = None
     _slack_post(response_url, blocks, "KubeSift fix")
+    if target:
+        # Applied: say whether it actually fixed the problem (Slack allows follow-ups on response_url for 30 min).
+        try:
+            v = verify(settings, client, target[0], value["namespace"], target[1])
+            store.audit("verify", v.target, False, f"{v.status}: {v.summary}", f"slack:{user}")
+            blocks = slack.verification_blocks(v)
+        except Exception as exc:
+            blocks = [{"type": "section", "text": {"type": "mrkdwn", "text": f":warning: Could not verify: {exc}"}}]
+        _slack_post(response_url, blocks, "KubeSift verification")

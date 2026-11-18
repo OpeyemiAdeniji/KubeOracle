@@ -4,6 +4,11 @@ Thanks for helping. The most valuable contributions are **new checks for failure
 
 ## Setup
 
+The quickest start is the dev container: open the repository in VS Code and choose **Reopen in Container**, or
+open it in GitHub Codespaces. It comes with the dev dependencies, Docker, kubectl, Helm, kind and MkDocs.
+
+By hand:
+
 ```bash
 pip install -e ".[dev]"
 pytest

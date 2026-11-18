@@ -71,9 +71,11 @@ put it behind oauth2-proxy (see [production.md](production.md#access-and-authent
 | `draft_postmortem` | A blameless postmortem draft in Markdown |
 | `list_checks` | Every check and what it detects |
 | `add_team_note` | Records what fixed a problem, shown next to future matching findings |
-| `apply_fix` | Only when `KUBESIFT_ALLOW_WRITES=true`: restart, rollback, scale, delete pod. Dry run by default |
+| `open_ticket` | Only when `github_repo` is set: a GitHub issue for an incident (comments on its open issue instead of duplicating) |
+| `verify_fix` | Did a fix work? Waits for the rollout, watches the pods, re-checks: resolved, still failing or rolling out |
+| `apply_fix` | Only when `KUBESIFT_ALLOW_WRITES=true`: restart, rollback, scale, delete pod, Service selector, memory limit (and `grant` with `KUBESIFT_ALLOW_RBAC_FIXES`). Dry run by default; then `verify_fix` ([fixes](fixes.md)) |
 
-All tools except `add_team_note` and `apply_fix` are marked read-only.
+All tools except `add_team_note`, `open_ticket` and `apply_fix` are marked read-only.
 
 When a call can't be answered (the cluster is unreachable or rejects the login, the resource doesn't exist, a
 duration or version is written wrong, the YAML doesn't parse), the tool returns an MCP error with the reason and,

@@ -118,6 +118,7 @@ def test_slack_apply_needs_explicit_allowlist(settings, monkeypatch):
 
     class P:
         description, kubectl = "restart", "kubectl rollout restart"
+        action, target = "restart", "deployment/shop/x"
 
     monkeypatch.setattr("kubesift.remediate.plan", lambda *a, **k: P())
     monkeypatch.setattr("kubesift.remediate.execute", lambda client, p, dry_run, *a, **k: calls.append(dry_run) or "ok")

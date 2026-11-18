@@ -31,8 +31,14 @@ the cluster unless you run `kubesift fix` and confirm.
 
    No pipx? `python -m pip install --user pipx && python -m pipx ensurepath`, then open a new terminal.
    `pip install "kubesift[all]"` in a virtualenv works too.
-   No Python at all? Download the standalone `kubectl-sift` for your OS from
-   [Releases](https://github.com/OpeyemiAdeniji/KubeSift/releases/latest) ([how](docs/krew.md)).
+   No Python at all? One line installs the standalone `kubectl-sift` (checksum-verified):
+
+   ```bash
+   curl -sSfL https://raw.githubusercontent.com/OpeyemiAdeniji/KubeSift/main/scripts/install.sh | sh
+   ```
+
+   Windows (PowerShell): `irm https://raw.githubusercontent.com/OpeyemiAdeniji/KubeSift/main/scripts/install.ps1 | iex`
+   ([more](docs/krew.md)).
 
 2. **Check that kubectl reaches your cluster.** KubeSift uses the same kubeconfig and current context.
 
@@ -129,11 +135,13 @@ helm install kubesift oci://ghcr.io/opeyemiadeniji/charts/kubesift -n kubesift -
 | `kubesift postmortem -n shop` | **After:** draft a blameless postmortem with timeline, root cause and action items |
 | `kubesift drill start crashloop` | **Practise:** break a drill namespace on purpose to train on-call |
 | `kubesift knowledge export` / `import` | Share what fixed past incidents between teams and clusters |
-| `kubesift fix rollback deployment/checkout -n shop` | Guarded fix: plan → server-side dry run → confirm → audit log |
+| `kubesift fix rollback deployment/checkout -n shop` | Guarded fix: plan → server-side dry run → confirm → apply → **verify it worked** → audit log. Also `set-selector`, `set-memory`, `grant`, `restart`, `scale` ([fixes](docs/fixes.md)) |
+| `kubesift ticket -n shop` | Open a GitHub issue for the incident (evidence, cause, fix, how to verify); never a duplicate ([tickets](docs/tickets.md)) |
+| `kubesift verify deploy/checkout -n shop` | Did the fix work? Waits for the rollout, watches the new pods, re-runs the checks (also after kubectl, Helm or GitOps changes) |
 | `kubesift snapshot save` | Redacted snapshot to analyse later with `--from` (judged as of when it was taken) or attach to a ticket |
 | `kubesift note add pod-oomkilled "Raised to 1Gi; leak fixed in 3.3"` | Team memory, shown next to matching findings |
 | `kubesift history` | Past investigations |
-| `kubesift serve` | Web dashboard and REST API |
+| `kubesift serve` | Web dashboard and REST API: incidents with a map of the broken link, live updates from background scans (fixed incidents move to Resolved), redacted pod logs, search and filters ([dashboard](docs/dashboard.md)) |
 | `kubesift mcp` | MCP server for Claude, Cursor, VS Code and other assistants |
 
 Every command takes `-o json`; `diagnose` and `lint` also take `-o markdown` (paste into a ticket or postmortem)
@@ -178,7 +186,9 @@ and `lint` takes `-o sarif` (GitHub code scanning). `--fail-on high` makes CI fa
 
 ## Docs
 
-- [All checks](docs/checks.md) · [Configuration](docs/configuration.md) · [MCP setup](docs/mcp.md) ·
+- [All checks](docs/checks.md) · [Fixing and verifying](docs/fixes.md) · [Dashboard](docs/dashboard.md) ·
+  [Tickets](docs/tickets.md) · [Auto-rollback](docs/auto-rollback.md) · [Configuration](docs/configuration.md) ·
+  [MCP setup](docs/mcp.md) ·
   [Standalone binary and krew](docs/krew.md) ·
   [Preflight](docs/preflight.md) · [Slack](docs/slack.md) · [Production deployment](docs/production.md) · [Architecture](docs/architecture.md) ·
   [Releasing](docs/releasing.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)

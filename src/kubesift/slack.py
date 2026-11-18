@@ -49,11 +49,11 @@ def _section(text: str) -> dict[str, Any]:
     return {"type": "section", "text": {"type": "mrkdwn", "text": text[:2900]}}
 
 
-def report_blocks(report: Any, title: str) -> list[dict[str, Any]]:
+def report_blocks(report: Any, title: str, tickets: bool = False) -> list[dict[str, Any]]:
     blocks: list[dict[str, Any]] = [{"type": "header", "text": {"type": "plain_text", "text": title[:150]}}]
     if report.diagnosis:
         blocks.append(_section(report.diagnosis.summary))
-    for inc in report.incidents[:5]:
+    for i, inc in enumerate(report.incidents[:5], start=1):
         top = inc.findings[0]
         text = f"{_SEV[inc.severity.value]} *{inc.title}*\n{top.message[:500]}"
         if inc.likely_trigger:
@@ -69,6 +69,11 @@ def report_blocks(report: Any, title: str) -> list[dict[str, Any]]:
                                   "value": json.dumps({"action": "rollback", "kind": "deployment",
                                                        "namespace": r.namespace, "name": r.name, "dry_run": True})}
         blocks.append(block)
+        if tickets:
+            blocks.append({"type": "actions", "elements": [{
+                "type": "button", "text": {"type": "plain_text", "text": "Open GitHub issue"},
+                "action_id": "sift_ticket",
+                "value": json.dumps({"namespace": report.namespace, "incident": i})}]})
     if not report.incidents:
         blocks.append(_section(":white_check_mark: No active problems found."))
     blocks.append({"type": "context", "elements": [{"type": "mrkdwn",
@@ -86,6 +91,17 @@ def changes_blocks(changes: list[Any], scope: str, since: str) -> list[dict[str,
             text += f"\n`{c.rollback_command}`"
         blocks.append(_section(text))
     return blocks
+
+
+def verification_blocks(v: Any) -> list[dict[str, Any]]:
+    """The follow-up after an applied fix: did it work?"""
+    icon = {"resolved": ":white_check_mark:", "still-failing": ":x:"}.get(v.status, ":hourglass_flowing_sand:")
+    text = f"{icon} *Verified:* {v.summary}" if v.ok else f"{icon} {v.summary}"
+    for line in v.problems[1:4]:
+        text += f"\n• {line}"
+    for c in v.commands[:2]:
+        text += f"\n`{c}`"
+    return [_section(text[:2900])]
 
 
 def fix_result_blocks(plan_text: str, kubectl: str, result: str, value: dict[str, Any], can_apply: bool) -> list[dict[str, Any]]:

@@ -31,6 +31,10 @@ _KEY_ENV = {
 }
 
 
+class ScopeError(ValueError):
+    """A namespace outside what this KubeSift is allowed to cover (restrict_namespace)."""
+
+
 class Settings(BaseModel):
     # Cluster access
     kubeconfig: str | None = None
@@ -66,6 +70,9 @@ class Settings(BaseModel):
     api_token: str | None = Field(default=None, repr=False)
     cors_origins: list[str] = Field(default_factory=list)
     allow_writes: bool = False
+    dashboard_logs: bool = True  # the dashboard's Logs button (redacted); false turns /api/v1/logs off
+    allow_rbac_fixes: bool = False  # also allow the `grant` fix (Role + RoleBinding) from the API, Slack and MCP
+    auto_rollback_namespaces: list[str] = Field(default_factory=list)  # see docs/auto-rollback.md; empty = off
     leader_election: bool = False  # several replicas: only the Lease holder runs background scans
     leader_namespace: str | None = None  # defaults to the pod's namespace
     scan_interval: int = 0  # seconds; 0 disables background scans
@@ -82,10 +89,32 @@ class Settings(BaseModel):
     slack_signing_secret: str | None = Field(default=None, repr=False)  # enables /api/v1/slack/* endpoints
     slack_allowed_users: list[str] = Field(default_factory=list)  # Slack user IDs allowed to apply fixes (empty = nobody)
 
+    # Tickets: open a GitHub issue per incident (no duplicates while it is open)
+    github_repo: str | None = None  # owner/repo
+    github_token: str | None = Field(default=None, repr=False)  # issues:write; GITHUB_TOKEN also works
+    github_api_url: str | None = None  # GitHub Enterprise: https://ghe.example.com/api/v3
+    ticket_on_alert: bool = False  # open/update an issue for each critical/high incident from alerts and scans
+
+    # Which namespaces this KubeSift covers
+    namespace_exclude: str | None = None  # regex: matching namespaces are left out of all-namespace scans
+    restrict_namespace: str | None = None  # serve only this namespace; requests for others are refused
+
     # Namespaces skipped by default when scanning all namespaces for hygiene checks
     system_namespaces: list[str] = Field(
         default_factory=lambda: ["kube-system", "kube-public", "kube-node-lease", "local-path-storage"]
     )
+
+    def scope(self, namespace: str | None) -> str | None:
+        """The namespace to work on. With restrict_namespace, "all" means that one and any other is refused."""
+        if self.restrict_namespace:
+            if namespace and namespace != self.restrict_namespace:
+                raise ScopeError(f"this KubeSift covers only namespace {self.restrict_namespace}")
+            return self.restrict_namespace
+        return namespace
+
+    def excluded(self, namespace: str | None) -> bool:
+        import re
+        return bool(namespace and self.namespace_exclude and re.search(self.namespace_exclude, namespace))
 
     def resolved_provider(self) -> str:
         p = (self.llm_provider or "auto").lower()

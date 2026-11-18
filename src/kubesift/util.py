@@ -153,6 +153,28 @@ def provider_managed(obj: dict[str, Any]) -> bool:
             or labels.get("kubernetes.azure.com/managedby") == "aks" or "eks.amazonaws.com/component" in labels)
 
 
+_RESTART_ONLY_ANNOTATIONS = ("kubectl.kubernetes.io/restartedAt",)
+
+
+def template_version(rs_or_workload: dict[str, Any]) -> str:
+    """A pod template's identity, ignoring what a restart changes (restartedAt, pod-template-hash).
+
+    Two ReplicaSets with the same value run the same version; the newer one is only a restart of the older.
+    """
+    import json
+
+    template = json.loads(json.dumps(((rs_or_workload.get("spec") or {}).get("template")) or {}))
+    md = template.setdefault("metadata", {})
+    (md.get("labels") or {}).pop("pod-template-hash", None)
+    for key in _RESTART_ONLY_ANNOTATIONS:
+        (md.get("annotations") or {}).pop(key, None)
+    md.pop("creationTimestamp", None)
+    for key in ("labels", "annotations"):  # {} left behind by the pops above == no map at all
+        if not md.get(key):
+            md.pop(key, None)
+    return json.dumps(template, sort_keys=True)
+
+
 def name_of(obj: dict[str, Any]) -> str:
     return meta(obj).get("name", "")
 

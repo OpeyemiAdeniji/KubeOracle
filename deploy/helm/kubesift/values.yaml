@@ -17,7 +17,7 @@ database:
 apiToken: ""
 # Or reference an existing Secret with these keys:
 #   api-token, database-url, anthropic-api-key, openai-api-key, openrouter-api-key,
-#   slack-webhook-url, teams-webhook-url
+#   slack-webhook-url, teams-webhook-url, slack-signing-secret, github-token
 existingSecret: ""
 
 llm:
@@ -34,7 +34,7 @@ prometheus:
   url: ""            # e.g. http://prometheus-operated.monitoring:9090
 
 scan:
-  interval: 300      # seconds between background scans; 0 disables
+  interval: 300      # seconds between background scans; 0 disables (the dashboard's Live mode needs them)
   namespace: ""      # empty = all namespaces
   notifyMinSeverity: high
 
@@ -43,18 +43,46 @@ notifications:
   teamsWebhookUrl: ""
   webhookUrl: ""
 
+# Which namespaces KubeSift covers. exclude: a regex, e.g. "^(dev-|sandbox-)" (system namespaces are already
+# skipped for hygiene checks). only: serve one namespace; requests for others get 403. Note the RBAC stays
+# cluster-wide read (nodes, storage classes, webhooks are cluster-scoped).
+namespaces:
+  exclude: ""
+  only: ""
+
+# Dashboard: the Logs button shows redacted pod logs to anyone with the API token.
+dashboard:
+  logs: true
+
 # Slack on-call: `/sift` slash command and fix buttons (see docs/slack.md).
 slack:
   signingSecret: ""      # from your Slack app's Basic Information page
   allowedUsers: []       # Slack user IDs allowed to apply fixes (also needs rbac.allowWrites)
+
+# Tickets: open a GitHub issue per incident, never a duplicate (see docs/tickets.md).
+tickets:
+  githubRepo: ""       # owner/repo; enables the API, MCP tool and Slack "Open GitHub issue" button
+  githubToken: ""      # fine-grained token with Issues: read and write (or existingSecret key github-token)
+  githubApiUrl: ""     # GitHub Enterprise Server, e.g. https://ghe.example.com/api/v3
+  onAlert: false        # open/update an issue for each urgent incident from alerts and background scans
 
 rbac:
   create: true
   # Reading Secrets lets KubeSift check missing secret references, TLS expiry and Helm releases.
   # Secret VALUES are never stored or sent anywhere; only key names and certificate dates are kept.
   readSecrets: true
-  # Allow guarded fixes (restart / rollback / scale / delete pod) from the API and MCP server.
+  # Allow guarded fixes from the API, Slack and MCP server: restart, rollback, scale, delete pod, Service
+  # selector, memory limit. Every fix is dry-run first, audited and verified afterwards.
   allowWrites: false
+  # Also allow the `grant` fix (a namespaced Role + RoleBinding for one verb on one resource). KubeSift can only
+  # grant permissions it holds itself (Kubernetes blocks escalation), but keep this off unless you need it.
+  allowRbacFixes: false
+
+# Roll back a Deployment automatically when a rollout in the last 30 minutes broke it (crash loop, image pull,
+# config error, OOM kill, stuck rollout), then verify. Needs rbac.allowWrites and scan.interval > 0.
+# List the namespaces, or ["*"] for every non-system namespace. Empty = off (see docs/auto-rollback.md).
+autoRollback:
+  namespaces: []
 
 persistence:
   enabled: true

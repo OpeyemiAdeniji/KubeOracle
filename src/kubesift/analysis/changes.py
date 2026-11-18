@@ -7,7 +7,7 @@ from typing import Any
 
 from kubesift.cluster.snapshot import Snapshot, event_time
 from kubesift.models import Change, ResourceRef
-from kubesift.util import containers_of, meta, now, parse_time
+from kubesift.util import containers_of, meta, now, parse_time, template_version
 
 _CONTROLLERS = ("kube-controller-manager", "kubelet", "kube-scheduler", "cert-manager-certificates-issuing")
 
@@ -100,9 +100,20 @@ def detect_changes(snap: Snapshot, window: timedelta = timedelta(hours=6)) -> li
         t = parse_time(meta(newest).get("creationTimestamp"))
         if not t or t < cutoff:
             continue
-        prev = rev(sets[-2]) if len(sets) > 1 else None
-        if prev is not None:
-            details = _template_diff(sets[-2], newest)
+        # Roll back to the previous *version*: revisions that only restarted this one run the same pods.
+        version = template_version(newest)
+        before = next((s for s in reversed(sets[:-1]) if template_version(s) != version), None)
+        prev = rev(before) if before is not None else None
+        if len(sets) > 1 and template_version(sets[-2]) == version:
+            # Say where the running version came from: that change, not the restart, is the likely cause.
+            origin = next(s for s in sets if template_version(s) == version
+                          and rev(s) > (rev(before) if before is not None else -1))
+            diff = _template_diff(before, origin) if before is not None else []
+            details = [f"restart only: same pod template as revision {rev(origin)}", *diff]
+            summary = f"Deployment {name} restarted (revision {rev(newest)})" + (
+                f"; this version came in revision {rev(origin)}: {diff[0]}" if diff else "")
+        elif prev is not None and before is not None:
+            details = _template_diff(before, newest)
             summary = f"Deployment {name} rolled out revision {rev(newest)}" + (f": {details[0]}" if details else "")
         elif rev(newest) <= 1:
             details = ["new Deployment: no earlier version to compare with or roll back to"]

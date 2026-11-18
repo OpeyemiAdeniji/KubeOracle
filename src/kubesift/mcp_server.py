@@ -49,7 +49,9 @@ def _found(result: Any) -> Any:
 INSTRUCTIONS = """KubeSift reads a Kubernetes cluster and returns evidence-backed findings.
 Start with `diagnose` (optionally scoped to a namespace), then use `explain_resource` on the workloads it names,
 and `recent_changes` to see what was deployed or edited before the problem began.
-Findings come from deterministic checks; quote their evidence and commands rather than guessing."""
+Findings come from deterministic checks; quote their evidence and commands rather than guessing.
+After the user applies a fix (with apply_fix, kubectl, Helm or GitOps), call `verify_fix` on the workload and only
+call the problem solved when it returns resolved."""
 
 
 def _compact_report(report: Any, include_risks: bool) -> dict[str, Any]:
@@ -178,19 +180,65 @@ def build_server(settings: Settings) -> MCPServer:
         store.add_note(check_id, note, target, author="mcp")
         return "saved"
 
+    @server.tool(annotations=READ_ONLY)
+    @explained
+    def verify_fix(kind: str, namespace: str, name: str, timeout_seconds: int = 120) -> str:
+        """Check that a fix worked: wait for the workload's rollout, watch its new pods for restarts, then re-run the
+        checks on it. Returns status resolved | still-failing | rolling-out with the remaining problems. Call it after
+        apply_fix, or after the user changed something with kubectl, Helm or GitOps. kind: deployment, statefulset,
+        daemonset or pod (a deleted pod: pass its Deployment instead)."""
+        from kubesift.cluster.client import KubeClient
+        from kubesift.verify import verify
+        settings.scope(namespace)
+        client = KubeClient(kubeconfig=settings.kubeconfig, context=settings.context, timeout=settings.request_timeout)
+        v = verify(settings, client, kind, namespace, name, timeout=max(10, min(timeout_seconds, 300)), settle=15)
+        store.audit("verify", v.target, False, f"{v.status}: {v.summary}", "mcp")
+        return json.dumps(v.to_dict())
+
+    if settings.github_repo:
+        @server.tool(annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False, open_world_hint=True))
+        @explained
+        def open_ticket(namespace: str | None = None, incident: int = 1, context: str | None = None) -> str:
+            """Open a GitHub issue for an incident from `diagnose` (1 = most severe): evidence, likely cause, fix,
+            commands and how to verify. If its issue is still open, adds a "still happening" comment instead.
+            Ask the user before calling it."""
+            from kubesift.tickets import TicketError, open_github_issue
+            report = investigate(settings, snapshot_for(settings, namespace, context), use_llm=False, store=store)
+            if not 1 <= incident <= len(report.incidents):
+                raise ValueError(f"no incident {incident}: {len(report.incidents)} found")
+            try:
+                return json.dumps(open_github_issue(settings, report, report.incidents[incident - 1]))
+            except TicketError as exc:
+                raise ValueError(str(exc)) from exc
+
     if settings.allow_writes:
         @server.tool(annotations=ToolAnnotations(read_only_hint=False, destructive_hint=True, open_world_hint=False))
         @explained
         def apply_fix(action: str, kind: str, namespace: str, name: str, replicas: int | None = None,
+                      to_revision: int | None = None, selector: dict[str, str] | None = None,
+                      match: str | None = None, container: str | None = None, memory: str | None = None,
+                      verbs: list[str] | None = None, resource: str | None = None, api_group: str = "",
                       dry_run: bool = True) -> str:
-            """Guarded remediation: restart | rollback | scale | delete-pod. Always run with dry_run=true first and
-            ask the user before calling with dry_run=false."""
+            """Guarded remediation. Always run with dry_run=true first and ask the user before dry_run=false;
+            after a real apply, call verify_fix with the returned arguments.
+            restart | rollback (to_revision optional) | scale (replicas) | delete-pod: kind deployment, statefulset,
+            daemonset or pod. set-selector: kind service, selector {"app": "web"} or match "deploy/web".
+            set-memory: container and memory ("512Mi"); only raises the limit. grant: kind serviceaccount, verbs and
+            resource (one, no wildcards), only when KUBESIFT_ALLOW_RBAC_FIXES=true."""
             from kubesift.cluster.client import KubeClient
-            from kubesift.remediate import execute, plan
+            from kubesift.remediate import execute, plan, verification_target
+            settings.scope(namespace)
+            if action == "grant" and not settings.allow_rbac_fixes:
+                raise ValueError("RBAC fixes are disabled (KUBESIFT_ALLOW_RBAC_FIXES=true enables them)")
             client = KubeClient(kubeconfig=settings.kubeconfig, context=settings.context, timeout=settings.request_timeout)
-            p = plan(client, action, kind, namespace, name, replicas)
+            p = plan(client, action, kind, namespace, name, replicas, to_revision, selector=selector, match=match,
+                     container=container, memory=memory, verbs=verbs, resource=resource, api_group=api_group)
+            verify_with = None
+            if not dry_run and (t := verification_target(client, p)):
+                verify_with = {"kind": t[0], "namespace": namespace, "name": t[1]}
             return json.dumps({"plan": p.description, "kubectl": p.kubectl, "dry_run": dry_run,
-                               "result": execute(client, p, dry_run, store, actor="mcp")})
+                               "result": execute(client, p, dry_run, store, actor="mcp"),
+                               "next": {"tool": "verify_fix", "arguments": verify_with} if verify_with else None})
 
     return server
 
