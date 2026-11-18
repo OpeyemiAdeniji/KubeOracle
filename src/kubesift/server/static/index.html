@@ -33,6 +33,23 @@ code{padding:1px 5px}pre{padding:8px;white-space:pre-wrap;word-break:break-word;
 .change{border-left:3px solid var(--accent);padding-left:8px;margin:6px 0}
 .ok{color:var(--ok);font-weight:600}.err{color:var(--crit)}details summary{cursor:pointer;color:var(--muted)}
 @media (max-width:640px){td,th{padding:6px 4px}.hide-sm{display:none}}
+.filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 14px}
+.filters input[type=search]{flex:1;min-width:180px}
+.chip{border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:999px;padding:3px 10px;cursor:pointer;font:inherit;font-size:12px}
+.chip.on{color:var(--text);border-color:var(--accent);font-weight:600}
+button.mini{background:var(--code);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:3px 10px;cursor:pointer;font:inherit;font-size:12px}
+.inc{border-left:4px solid var(--line)}.inc-critical{border-left-color:var(--crit)}.inc-high{border-left-color:var(--high)}
+.inc-medium{border-left-color:var(--med)}.inc-low{border-left-color:var(--low)}
+.inc .sev{min-width:60px}.inc-head{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.map{overflow-x:auto;margin-top:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+.map svg{display:block}.legend{font-size:12px;color:var(--muted);padding:6px 10px;border-top:1px solid var(--line)}
+.live-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--ok);margin-right:6px;animation:pulse 2s infinite}
+@keyframes pulse{50%{opacity:.3}}@media (prefers-reduced-motion:reduce){.live-dot{animation:none}}
+.resolved{opacity:.75}.resolved b{text-decoration:line-through}
+dialog{border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--text);width:min(1000px,95vw);padding:0}
+dialog::backdrop{background:rgba(0,0,0,.5)}.dlg-head{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid var(--line)}
+.logs{max-height:65vh;overflow:auto;margin:0;border-radius:0;font-size:12px}.logs .e{color:var(--crit)}
 </style>
 </head>
 <body>
@@ -41,12 +58,18 @@ code{padding:1px 5px}pre{padding:8px;white-space:pre-wrap;word-break:break-word;
   <nav id="nav"></nav>
 </header>
 <main id="main"></main>
+<dialog id="logs" aria-label="Pod logs"><div class="dlg-head"><b id="logs-title"></b><select id="logs-c" aria-label="Container"></select>
+<label><input type="checkbox" id="logs-prev"> previous container</label><button class="mini" id="logs-close" style="margin-left:auto">Close</button></div>
+<pre class="logs" id="logs-body"></pre></dialog>
 <script>
 const TABS = ["Diagnose", "Ask", "Changes", "Cost", "Upgrade", "Lint", "History"];
 const $ = (s, el = document) => el.querySelector(s);
 const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 let token = ""; try { token = sessionStorage.getItem("ko-token") || ""; } catch (e) {}
 let current = "Diagnose";
+let INFO = {};
+const filt = {q: "", sev: new Set(["critical", "high", "medium", "low"]), ns: ""};
+let lastReport = null, live = null;
 
 async function api(path, opts = {}) {
   const headers = {"Content-Type": "application/json"};
@@ -77,7 +100,8 @@ async function run(btn, fn) {
 function findingRows(fs) {
   if (!fs.length) return `<p class="ok">✓ Nothing found.</p>`;
   return `<table><tr><th>Severity</th><th>Resource</th><th>Finding</th></tr>` + fs.map(f => `<tr><td>${sev(f.severity)}</td>
-  <td><code>${esc(f.owner ? `${f.owner.kind}/${f.owner.namespace || ""}/${f.owner.name}` : f.resource.name)}</code><div class="muted">${esc(f.check)}</div></td>
+  <td><code>${esc(f.owner ? `${f.owner.kind}/${f.owner.namespace || ""}/${f.owner.name}` : f.resource.name)}</code><div class="muted">${esc(f.check)}</div>
+  ${f.resource.kind === "Pod" && INFO.dashboard_logs ? `<button class="mini" data-logs="${esc(f.resource.namespace)}/${esc(f.resource.name)}">Logs</button>` : ""}</td>
   <td>${esc(f.message)}${(f.related_changes || []).slice(0,1).map(c => `<div class="change">after: ${esc(c.summary)}</div>`).join("")}
   <details><summary>evidence &amp; fix</summary>${(f.evidence||[]).map(e => `<div class="muted">• ${esc(e)}</div>`).join("")}
   ${f.remediation ? `<p><b>Fix:</b> ${esc(f.remediation)}</p>` : ""}${(f.commands||[]).map(c => `<pre>${esc(c)}</pre>`).join("")}
@@ -92,12 +116,96 @@ function diagnosisCard(d) {
     (d.next_checks.length ? `<p class="muted">Next: ${d.next_checks.map(esc).join("; ")}</p>` : "") + `</div>`;
 }
 
+// ---------------------------------------------------------------- filters (search, severity, namespace)
+const nsOf = x => (x.owner && x.owner.namespace) || (x.resource && x.resource.namespace) || (x.root && x.root.namespace) || "";
+const matchQ = (...parts) => !filt.q || parts.join(" ").toLowerCase().includes(filt.q.toLowerCase());
+const keepFinding = f => filt.sev.has(f.severity) && (!filt.ns || nsOf(f) === filt.ns) &&
+  matchQ(f.check, f.message, f.resource && f.resource.name, f.owner && f.owner.name);
+const keepIncident = i => filt.sev.has(i.severity) && (!filt.ns || nsOf(i) === filt.ns) &&
+  matchQ(i.title, i.root && i.root.name, i.message || "", ...(Array.isArray(i.findings) ? i.findings.map(f => f.check + " " + f.message) : []));
+function filterBar(namespaces) {
+  return `<div class="filters" role="search"><input type="search" id="f-q" placeholder="Search name, check or message" value="${esc(filt.q)}" aria-label="Search">` +
+    ["critical", "high", "medium", "low"].map(k => `<button class="chip ${filt.sev.has(k) ? "on" : ""}" data-sev="${k}" aria-pressed="${filt.sev.has(k)}">${k}</button>`).join("") +
+    (namespaces.length > 1 ? `<select id="f-ns" aria-label="Namespace"><option value="">all namespaces</option>${namespaces.map(n => `<option ${n === filt.ns ? "selected" : ""}>${esc(n)}</option>`).join("")}</select>` : "") + `</div>`;
+}
+function bindFilters(root, rerender) {
+  const q = $("#f-q", root); if (q) q.oninput = () => { filt.q = q.value; rerender(); const n = $("#f-q", root); if (n) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); } };
+  root.querySelectorAll("[data-sev]").forEach(b => b.onclick = () => { const k = b.dataset.sev; filt.sev.has(k) ? filt.sev.delete(k) : filt.sev.add(k); rerender(); });
+  const ns = $("#f-ns", root); if (ns) ns.onchange = () => { filt.ns = ns.value; rerender(); };
+}
+
+// ---------------------------------------------------------------- incidents and the incident map
+const MAPPABLE = new Set(["Deployment", "StatefulSet", "DaemonSet", "Service", "Pod"]);
+function incidentCard(i, extra = "") {
+  const root = i.root || {};
+  const msg = i.message || ((i.findings || [])[0] || {}).message || "";
+  const trig = i.trigger !== undefined ? i.trigger : (i.likely_trigger ? i.likely_trigger.summary : null);
+  const rb = i.rollback !== undefined ? i.rollback : (i.likely_trigger ? i.likely_trigger.rollback_command : null);
+  const n = i.findings ? (Array.isArray(i.findings) ? i.findings.length : i.findings) : 0;
+  return `<div class="card inc inc-${esc(i.severity)}"><div class="inc-head">${sev(i.severity)}<b>${esc(i.title)}</b><span class="muted">${esc(i.layer || "")} · ${n} finding(s)</span>${extra}</div>
+    <p>${esc(msg)}</p>${trig ? `<div class="change">after: ${esc(trig)}</div>` : ""}${rb ? `<pre>${esc(rb)}</pre>` : ""}
+    <div class="acts">${MAPPABLE.has(root.kind) && root.namespace ? `<button class="mini" data-map="${esc(root.kind)}|${esc(root.namespace)}|${esc(root.name)}" aria-expanded="false">Map</button>` : ""}
+    <code class="muted">kubesift verify ${esc((root.kind || "").toLowerCase())}/${esc(root.name || "")} -n ${esc(root.namespace || "default")}</code></div><div class="map-holder"></div></div>`;
+}
+const COLORS = {ok: "var(--line)", warn: "var(--med)", bad: "var(--crit)"};
+function mapSvg(m) {
+  if (m.error) return `<p class="muted" style="padding:10px">${esc(m.error)}</p>`;
+  const cols = [...new Set(m.nodes.map(n => n.column))].sort((a, b) => a - b);
+  const colIx = Object.fromEntries(cols.map((c, i) => [c, i]));
+  const W = 200, H = 52, GAP = 14, PAD = 12, NODE_W = 168, pos = {}, rows = {};
+  m.nodes.forEach(n => { const c = colIx[n.column]; rows[c] = (rows[c] || 0); pos[n.id] = {x: PAD + c * W, y: PAD + rows[c] * (H + GAP)}; rows[c]++; });
+  const height = PAD * 2 + Math.max(1, ...Object.values(rows)) * (H + GAP) - GAP, width = PAD * 2 + cols.length * W - (W - NODE_W);
+  const cut = (t, k) => t.length > k ? t.slice(0, k - 1) + "…" : t;
+  const edges = m.edges.map(e => { const a = pos[e.from], b = pos[e.to]; if (!a || !b) return "";
+    const x1 = a.x + NODE_W, y1 = a.y + H / 2, x2 = b.x, y2 = b.y + H / 2, mx = (x1 + x2) / 2;
+    return `<path d="M${x1} ${y1} C${mx} ${y1} ${mx} ${y2} ${x2} ${y2}" fill="none" stroke="${COLORS[e.status]}" stroke-width="${e.status === "bad" ? 2.5 : 1.5}" ${e.status === "bad" ? 'stroke-dasharray="6 4"' : ""}><title>${esc(e.label || e.status)}</title></path>` +
+      (e.label ? `<text x="${mx}" y="${(y1 + y2) / 2 - 6}" font-size="11" text-anchor="middle" fill="var(--crit)">${esc(cut(e.label, 26))}</text>` : ""); }).join("");
+  const nodes = m.nodes.map(n => { const p = pos[n.id]; return `<g><title>${esc(n.kind)} ${esc(n.name)}${n.detail ? " — " + esc(n.detail) : ""}</title>
+    <rect x="${p.x}" y="${p.y}" width="${NODE_W}" height="${H}" rx="8" fill="var(--panel)" stroke="${n.status === "ok" ? "var(--line)" : COLORS[n.status]}" stroke-width="${n.status === "ok" ? 1 : 2}"/>
+    <rect x="${p.x}" y="${p.y}" width="5" height="${H}" rx="2" fill="${n.status === "ok" ? "var(--ok)" : COLORS[n.status]}"/>
+    <text x="${p.x + 14}" y="${p.y + 16}" font-size="11" fill="var(--muted)">${esc(n.kind)}</text>
+    <text x="${p.x + 14}" y="${p.y + 31}" font-size="13" font-weight="600" fill="var(--text)">${esc(cut(n.name, 21))}</text>
+    <text x="${p.x + 14}" y="${p.y + 45}" font-size="11" fill="${n.status === "ok" ? "var(--muted)" : COLORS[n.status]}">${esc(cut(n.detail || "", 25))}</text></g>`; }).join("");
+  return `<svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" aria-label="Incident map">${edges}${nodes}</svg>
+    <div class="legend">Green: healthy · yellow: degraded · <span class="err">red dashed: the broken link</span>. Hover for details.</div>`;
+}
+async function toggleMap(btn) {
+  const holder = btn.closest(".inc").querySelector(".map-holder");
+  if (holder.innerHTML) { holder.innerHTML = ""; btn.setAttribute("aria-expanded", "false"); return; }
+  const [kind, ns, name] = btn.dataset.map.split("|");
+  holder.innerHTML = `<p class="muted">Drawing the map…</p>`;
+  try { holder.innerHTML = `<div class="map">${mapSvg(await api(`/api/v1/map?namespace=${encodeURIComponent(ns)}&kind=${encodeURIComponent(kind)}&name=${encodeURIComponent(name)}`))}</div>`; btn.setAttribute("aria-expanded", "true"); }
+  catch (e) { holder.innerHTML = `<p class="err">${esc(e.message)}</p>`; }
+}
+
+// ---------------------------------------------------------------- logs
+async function showLogs(target, container, previous) {
+  const [ns, pod] = target.split("/"), dlg = $("#logs");
+  $("#logs-title").textContent = `${ns}/${pod}`; $("#logs-body").textContent = "Loading…";
+  if (!dlg.open) dlg.showModal();
+  try {
+    const q = `namespace=${encodeURIComponent(ns)}&pod=${encodeURIComponent(pod)}&previous=${previous}` + (container ? `&container=${encodeURIComponent(container)}` : "");
+    const r = await api("/api/v1/logs?" + q);
+    $("#logs-c").innerHTML = r.containers.map(c => `<option ${c === r.container ? "selected" : ""}>${esc(c)}</option>`).join("");
+    $("#logs-body").innerHTML = r.lines.length ? r.lines.map(l => /error|exception|fatal|panic|forbidden|denied|refused|killed/i.test(l) ? `<span class="e">${esc(l)}</span>` : esc(l)).join("\n") : "(no log lines)";
+  } catch (e) { $("#logs-body").textContent = e.message; }
+  $("#logs-c").onchange = () => showLogs(target, $("#logs-c").value, $("#logs-prev").checked);
+  $("#logs-prev").onchange = () => showLogs(target, $("#logs-c").value, $("#logs-prev").checked);
+}
+document.addEventListener("click", e => {
+  const m = e.target.closest("[data-map]"); if (m) return toggleMap(m);
+  const l = e.target.closest("[data-logs]"); if (l) { $("#logs-prev").checked = false; return showLogs(l.dataset.logs, null, false); }
+});
+
 function reportView(r) {
   const c = {critical:0, high:0, medium:0, low:0};
   r.findings.forEach(f => c[f.severity] = (c[f.severity] || 0) + 1);
-  const problems = r.findings.filter(f => f.kind === "problem"), risks = r.findings.filter(f => f.kind === "risk");
+  const problems = r.findings.filter(f => f.kind === "problem" && keepFinding(f)), risks = r.findings.filter(f => f.kind === "risk" && keepFinding(f));
+  const incidents = (r.incidents || []).filter(keepIncident);
+  const namespaces = [...new Set(r.findings.map(nsOf).filter(Boolean))].sort();
   return `<div class="stats">${["critical","high","medium","low"].map(k => `<div class="stat"><span class="sev ${k}">${k}</span><b>${c[k]}</b></div>`).join("")}
-    <div class="stat">changes<b>${r.changes.length}</b></div></div>` + diagnosisCard(r.diagnosis) +
+    <div class="stat">changes<b>${r.changes.length}</b></div></div>` + diagnosisCard(r.diagnosis) + filterBar(namespaces) +
+    ((r.incidents || []).length ? `<h3>Incidents <span class="muted">(${incidents.length} of ${r.incidents.length})</span></h3>${incidents.map(i => incidentCard(i)).join("") || `<p class="muted">No incident matches the filters.</p>`}` : "") +
     `<div class="card"><h3>Problems</h3>${findingRows(problems)}</div>` +
     (r.changes.length ? `<div class="card"><h3>Recent changes</h3>${r.changes.slice(0, 15).map(ch => `<div class="change"><b>${esc(ch.time.slice(5,16).replace("T"," "))}</b> ${esc(ch.summary)}${ch.rollback_command ? `<pre>${esc(ch.rollback_command)}</pre>` : ""}</div>`).join("")}</div>` : "") +
     `<div class="card"><details><summary>${risks.length} configuration risks</summary>${findingRows(risks)}</details></div>` +
@@ -105,22 +213,86 @@ function reportView(r) {
 }
 
 // Rule-based results show at once; the LLM explanation is filled in when it arrives (local models can take minutes).
-function showReport(out, r) {
+function paint(out, r) {
+  lastReport = r;
   out.innerHTML = reportView(r) + (r.llm_pending ? `<p class="muted" id="llm-wait">AI explanation in progress… this page updates when it is ready.</p>` : "");
+  bindFilters(out, () => paint(out, lastReport));
+}
+function showReport(out, r) {
+  paint(out, r);
   if (!r.llm_pending) return;
   const poll = () => setTimeout(async () => {
     if (!document.body.contains(out) || !$("#llm-wait")) return;  // user moved on
     try {
       const next = await api("/api/v1/history/" + encodeURIComponent(r.id));
       if (next.llm_pending) return poll();
-      out.innerHTML = reportView(next);
+      paint(out, next);
     } catch (e) { const w = $("#llm-wait"); if (w) w.textContent = "AI explanation unavailable: " + e.message; }
   }, 5000);
   poll();
 }
 
+// ---------------------------------------------------------------- live: follows the background scans
+function stopLive() { if (live) { live.abort.abort(); live = null; } }
+async function readStream(onEvent, signal) {
+  const headers = token ? {Authorization: "Bearer " + token} : {};
+  const r = await fetch("/api/v1/stream", {headers, signal});
+  if (r.status === 401) { token = prompt("API token (KUBESIFT_API_TOKEN):") || ""; try { sessionStorage.setItem("ko-token", token); } catch (e) {} return readStream(onEvent, signal); }
+  if (!r.ok || !r.body) throw new Error(r.statusText || "stream failed");
+  const reader = r.body.getReader(), dec = new TextDecoder(); let buf = "";
+  for (;;) {
+    const {value, done} = await reader.read(); if (done) return;
+    buf += dec.decode(value, {stream: true}); let i;
+    while ((i = buf.indexOf("\n\n")) >= 0) {
+      const data = buf.slice(0, i).split("\n").filter(l => l.startsWith("data: ")).map(l => l.slice(6)).join("\n");
+      buf = buf.slice(i + 2); if (data) onEvent(JSON.parse(data));
+    }
+  }
+}
+function liveView(st) {
+  const ev = st.event;
+  if (!ev) return `<p class="muted"><span class="live-dot"></span>Waiting for the next background scan…</p>`;
+  if (!ev.live) return `<p class="muted">Live mode needs background scans: ${esc(ev.reason)}.</p>`;
+  const active = ev.incidents.filter(keepIncident);
+  const namespaces = [...new Set(ev.incidents.map(nsOf).filter(Boolean))].sort();
+  const c = ev.counts || {};
+  return `<p><span class="live-dot"></span><b>Live</b> <span class="muted">· ${esc(ev.cluster)} · last scan ${esc(String(ev.time).slice(11, 19))} UTC · updates by itself</span></p>
+    <div class="stats">${["critical","high","medium","low"].map(k => `<div class="stat"><span class="sev ${k}">${k}</span><b>${c[k] || 0}</b></div>`).join("")}</div>` +
+    filterBar(namespaces) + `<h3>Active incidents <span class="muted">(${active.length})</span></h3>` +
+    (active.map(i => incidentCard(i, st.fresh.has(i.id) ? `<span class="chip on">new</span>` : "")).join("") || `<p class="ok">✓ No active incidents.</p>`) +
+    (st.resolved.length ? `<h3>Resolved</h3>` + st.resolved.map(x => `<div class="card resolved"><span class="ok">✓ resolved ${esc(String(x.at).slice(11, 16))}</span> <b>${esc(x.inc.title)}</b></div>`).join("") : "");
+}
+function startLive(out) {
+  stopLive();
+  const st = {event: null, active: new Map(), resolved: [], fresh: new Set(), abort: new AbortController()};
+  live = st;
+  const draw = () => { if (live === st) { out.innerHTML = liveView(st); bindFilters(out, draw); } };
+  const onEvent = ev => {
+    if (ev.live) {
+      const now = new Map(ev.incidents.map(i => [i.id, i]));
+      st.fresh = new Set(st.event ? [...now.keys()].filter(id => !st.active.has(id)) : []);
+      for (const [id, inc] of st.active) if (!now.has(id)) st.resolved.unshift({inc, at: ev.time});
+      st.resolved = st.resolved.slice(0, 20); st.active = now;
+    }
+    st.event = ev; draw();
+  };
+  draw();
+  const loop = async () => {
+    while (live === st) {
+      try { await readStream(onEvent, st.abort.signal); } catch (e) {
+        if (live !== st) return;
+        out.insertAdjacentHTML("afterbegin", `<p class="err">Live updates interrupted (${esc(e.message)}); retrying…</p>`);
+      }
+      if (st.event && !st.event.live) return;
+      await new Promise(r => setTimeout(r, 5000));   // reconnect after a dropped connection
+    }
+  };
+  loop();
+}
+
 const views = {
-  Diagnose: () => `<div class="bar">${nsInput}<label><input type="checkbox" id="llm" checked> use LLM</label><button class="go" id="go">Diagnose</button></div><div id="out"></div>`,
+  Diagnose: () => `<div class="bar">${nsInput}<label><input type="checkbox" id="llm" checked> use LLM</label><button class="go" id="go">Diagnose</button>
+    <label title="Follow the background scans: new incidents appear, fixed ones move to Resolved"><input type="checkbox" id="live"> Live</label></div><div id="out"></div>`,
   Ask: () => `<div class="bar"><input id="q" placeholder="Why is checkout failing in shop?" style="flex:1;min-width:240px">${nsInput}<button class="go" id="go">Ask</button></div><div id="out"></div>`,
   Changes: () => `<div class="bar">${nsInput}<select id="since"><option>1h</option><option>6h</option><option selected>24h</option><option>7d</option></select><button class="go" id="go">Show changes</button></div><div id="out"></div>`,
   Cost: () => `<div class="bar">${nsInput}<button class="go" id="go">Analyse cost</button></div><div id="out"></div>`,
@@ -146,6 +318,7 @@ const actions = {
 };
 
 async function render() {
+  stopLive();
   $("#main").innerHTML = views[current]();
   if (current === "History") {
     const out = $("#out");
@@ -158,9 +331,11 @@ async function render() {
   }
   const btn = $("#go"); btn.onclick = () => run(btn, actions[current]);
   const q = $("#q"); if (q) q.onkeydown = e => { if (e.key === "Enter") btn.click(); };
+  const lv = $("#live"); if (lv) lv.onchange = () => { if (lv.checked) { btn.disabled = true; startLive($("#out")); } else { stopLive(); btn.disabled = false; $("#out").innerHTML = ""; } };
 }
 
-api("/api/v1/info").then(i => $("#meta").textContent = `v${i.version} · LLM: ${i.llm === "none" ? "off (rules only)" : i.llm + " / " + i.model}`).catch(() => {});
+api("/api/v1/info").then(i => { INFO = i; $("#meta").textContent = `v${i.version} · LLM: ${i.llm === "none" ? "off (rules only)" : i.llm + " / " + i.model}`; }).catch(() => {});
+$("#logs-close").onclick = () => $("#logs").close();
 nav(); render();
 </script>
 </body>

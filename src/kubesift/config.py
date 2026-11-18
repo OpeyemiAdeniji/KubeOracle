@@ -66,6 +66,7 @@ class Settings(BaseModel):
     api_token: str | None = Field(default=None, repr=False)
     cors_origins: list[str] = Field(default_factory=list)
     allow_writes: bool = False
+    dashboard_logs: bool = True  # the dashboard's Logs button (redacted); false turns /api/v1/logs off
     allow_rbac_fixes: bool = False  # also allow the `grant` fix (Role + RoleBinding) from the API, Slack and MCP
     auto_rollback_namespaces: list[str] = Field(default_factory=list)  # see docs/auto-rollback.md; empty = off
     leader_election: bool = False  # several replicas: only the Lease holder runs background scans

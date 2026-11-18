@@ -94,6 +94,7 @@ Without Prometheus, metrics-server's current usage is used (one sample; treat as
 | `api_token` | none | Protects the API, Alertmanager webhook and `/mcp`; required on a non-local address |
 | `cors_origins` | none | Comma-separated |
 | `allow_writes` | `false` | Enables `/api/v1/fix` (verified in the background; poll `/api/v1/verify/{id}`) and the MCP `apply_fix` tool |
+| `dashboard_logs` | `true` | The dashboard's Logs button (`/api/v1/logs`, redacted); `false` turns it off |
 | `allow_rbac_fixes` | `false` | Also allow the `grant` fix (Role + RoleBinding) from the API, Slack and MCP |
 | `auto_rollback_namespaces` | `[]` | Roll back a just-broken rollout automatically in these namespaces (`*` = all non-system); needs `allow_writes` ([auto-rollback](auto-rollback.md)) |
 | `github_repo` | — | `owner/repo` for incident issues ([tickets](tickets.md)) |

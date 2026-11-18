@@ -34,7 +34,7 @@ prometheus:
   url: ""            # e.g. http://prometheus-operated.monitoring:9090
 
 scan:
-  interval: 300      # seconds between background scans; 0 disables
+  interval: 300      # seconds between background scans; 0 disables (the dashboard's Live mode needs them)
   namespace: ""      # empty = all namespaces
   notifyMinSeverity: high
 
@@ -42,6 +42,10 @@ notifications:
   slackWebhookUrl: ""
   teamsWebhookUrl: ""
   webhookUrl: ""
+
+# Dashboard: the Logs button shows redacted pod logs to anyone with the API token.
+dashboard:
+  logs: true
 
 # Slack on-call: `/sift` slash command and fix buttons (see docs/slack.md).
 slack:

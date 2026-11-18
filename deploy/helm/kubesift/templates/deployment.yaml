@@ -78,6 +78,8 @@ spec:
             {{- end }}
             - name: KUBESIFT_NOTIFY_MIN_SEVERITY
               value: {{ .Values.scan.notifyMinSeverity | quote }}
+            - name: KUBESIFT_DASHBOARD_LOGS
+              value: {{ .Values.dashboard.logs | quote }}
             - name: KUBESIFT_ALLOW_WRITES
               value: {{ .Values.rbac.allowWrites | quote }}
             - name: KUBESIFT_ALLOW_RBAC_FIXES

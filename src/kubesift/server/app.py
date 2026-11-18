@@ -167,12 +167,92 @@ def create_app(settings: Settings) -> FastAPI:
 
     @app.get("/", include_in_schema=False)
     def index() -> FileResponse:
-        return FileResponse(STATIC / "index.html")
+        # no-cache: after an upgrade the browser must fetch the new dashboard, not run the old one
+        return FileResponse(STATIC / "index.html", headers={"Cache-Control": "no-cache"})
+
+    @app.get("/api/v1/map", dependencies=[Depends(auth)])
+    def incident_map(namespace: str, kind: str, name: str) -> dict[str, Any]:
+        """The incident map: what the resource is connected to, with the broken link marked."""
+        from kubesift.topology import build_map
+        from kubesift.util import check_name
+        try:
+            check_name(name)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        kinds = {"deployment": "Deployment", "statefulset": "StatefulSet", "daemonset": "DaemonSet",
+                 "service": "Service", "pod": "Pod"}
+        if kind.lower() not in kinds:
+            raise HTTPException(status_code=400, detail="kind must be Deployment, StatefulSet, DaemonSet, Service or Pod")
+        return build_map(snap(namespace, None, with_logs=False), kinds[kind.lower()], namespace, name)
+
+    @app.get("/api/v1/logs", dependencies=[Depends(auth)])
+    def pod_logs(namespace: str, pod: str, container: str | None = None, previous: bool = False,
+                 tail: int = 200) -> dict[str, Any]:
+        """A pod's recent log lines, redacted like everything else KubeSift shows (dashboard_logs=false disables)."""
+        from kubesift.cluster.client import KubeError
+        from kubesift.redact import redact
+        from kubesift.util import check_name
+        if not settings.dashboard_logs:
+            raise HTTPException(status_code=403, detail="log viewing is disabled (dashboard_logs=false)")
+        try:
+            check_name(namespace, "namespace")
+            check_name(pod)
+            check_name(container, "container")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        client = KubeClient(kubeconfig=settings.kubeconfig, context=settings.context, timeout=settings.request_timeout)
+        try:
+            spec = client.get(f"/api/v1/namespaces/{namespace}/pods/{pod}").get("spec") or {}
+            names = [c.get("name", "") for c in (spec.get("initContainers") or []) + (spec.get("containers") or [])]
+            if container is None:  # the first container that is not an init container
+                container = next((c.get("name") for c in spec.get("containers") or []), None)
+            if container not in names:
+                raise HTTPException(status_code=400, detail=f"container must be one of: {', '.join(names)}")
+            text = client.pod_logs(namespace, pod, container, previous, tail=max(1, min(tail, 1000)))
+        except KubeError as exc:
+            raise HTTPException(status_code=exc.status if exc.status in (400, 403, 404) else 502,
+                                detail=exc.message) from exc
+        return {"pod": pod, "container": container, "containers": names, "previous": previous,
+                "lines": [redact(line[:2000]) for line in (text or "").splitlines()]}
+
+    @app.get("/api/v1/stream", dependencies=[Depends(auth)])
+    async def stream(request: Request) -> Any:
+        """Server-sent events: the latest background scan, whenever a new one lands (any replica's, via the store)."""
+        import asyncio
+        import json as _json
+
+        from fastapi.responses import StreamingResponse
+
+        def latest() -> tuple[str | None, Report | None]:
+            if state["last_report"] is not None:
+                return str(state["last_scan"]), state["last_report"]
+            rows = [r for r in store.list_reports(20) if r["source"] == "scan"]  # another replica scans
+            return (rows[0]["id"], store.get_report(rows[0]["id"])) if rows else (None, None)
+
+        async def events() -> Any:
+            if not settings.scan_interval:
+                yield "data: " + _json.dumps({"live": False, "reason": "background scans are off "
+                                              "(set scan_interval / scan.interval)"}) + "\n\n"
+                return
+            seen, quiet = None, 0
+            while not await request.is_disconnected():
+                key, report = await asyncio.to_thread(latest)
+                if report is not None and key != seen:
+                    seen, quiet = key, 0
+                    yield "data: " + _json.dumps(_live_payload(report), default=str) + "\n\n"
+                elif (quiet := quiet + 1) >= 8:
+                    quiet = 0
+                    yield ": keep-alive\n\n"
+                await asyncio.sleep(2)
+
+        return StreamingResponse(events(), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
     @app.get("/api/v1/info", dependencies=[Depends(auth)])
     def info() -> dict[str, Any]:
         return {"version": __version__, "llm": settings.resolved_provider(), "model": settings.resolved_model(),
                 "allow_writes": settings.allow_writes, "scan_interval": settings.scan_interval,
+                "dashboard_logs": settings.dashboard_logs, "tickets": bool(settings.github_repo),
                 "last_scan": state["last_scan"], "leader": state["elector"].is_leader,
                 "storage": "postgresql" if store.postgres else "sqlite", "mcp": mcp_asgi is not None}
 
@@ -513,6 +593,19 @@ def _alert_investigation_locked(settings: Settings, store: Store, namespaces: li
             _auto_tickets(settings, report)
         except Exception as exc:
             log.warning("alert investigation failed for %s: %s", ns, exc)
+
+
+def _live_payload(report: Report) -> dict[str, Any]:
+    """What the dashboard's live mode needs from a scan: incidents, counts, when."""
+    return {
+        "live": True, "cluster": report.cluster, "namespace": report.namespace, "time": report.collected_at,
+        "counts": report.counts(),
+        "incidents": [{"id": i.id, "title": i.title, "severity": i.severity.value, "layer": i.layer,
+                       "root": i.root.model_dump(), "message": i.findings[0].message if i.findings else "",
+                       "trigger": i.likely_trigger.summary if i.likely_trigger else None,
+                       "rollback": i.likely_trigger.rollback_command if i.likely_trigger else None,
+                       "findings": len(i.findings)} for i in report.incidents[:50]],
+    }
 
 
 def _auto_tickets(settings: Settings, report: Report, fresh: set[str] | None = None) -> None:

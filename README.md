@@ -124,7 +124,7 @@ helm install kubesift oci://ghcr.io/opeyemiadeniji/charts/kubesift -n kubesift -
 | `kubesift snapshot save` | Redacted snapshot to analyse later with `--from` (judged as of when it was taken) or attach to a ticket |
 | `kubesift note add pod-oomkilled "Raised to 1Gi; leak fixed in 3.3"` | Team memory, shown next to matching findings |
 | `kubesift history` | Past investigations |
-| `kubesift serve` | Web dashboard and REST API |
+| `kubesift serve` | Web dashboard and REST API: incidents with a map of the broken link, live updates from background scans (fixed incidents move to Resolved), redacted pod logs, search and filters |
 | `kubesift mcp` | MCP server for Claude, Cursor, VS Code and other assistants |
 
 Every command takes `-o json`; `diagnose` and `lint` also take `-o markdown` (paste into a ticket or postmortem)

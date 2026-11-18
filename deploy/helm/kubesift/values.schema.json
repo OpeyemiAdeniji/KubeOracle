@@ -144,6 +144,16 @@
         }
       }
     },
+    "dashboard": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "logs": {
+          "type": "boolean",
+          "description": "Show redacted pod logs in the dashboard"
+        }
+      }
+    },
     "slack": {
       "type": "object",
       "additionalProperties": false,
