@@ -144,6 +144,21 @@
         }
       }
     },
+    "namespaces": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "exclude": {
+          "type": "string",
+          "description": "Regex of namespaces to leave out"
+        },
+        "only": {
+          "type": "string",
+          "pattern": "^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+          "description": "Serve only this namespace"
+        }
+      }
+    },
     "dashboard": {
       "type": "object",
       "additionalProperties": false,

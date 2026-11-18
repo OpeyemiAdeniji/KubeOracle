@@ -29,8 +29,14 @@ the cluster unless you run `kubesift fix` and confirm.
 
    No pipx? `python -m pip install --user pipx && python -m pipx ensurepath`, then open a new terminal.
    `pip install "kubesift[all]"` in a virtualenv works too.
-   No Python at all? Download the standalone `kubectl-sift` for your OS from
-   [Releases](https://github.com/OpeyemiAdeniji/KubeSift/releases/latest) ([how](docs/krew.md)).
+   No Python at all? One line installs the standalone `kubectl-sift` (checksum-verified):
+
+   ```bash
+   curl -sSfL https://raw.githubusercontent.com/OpeyemiAdeniji/KubeSift/main/scripts/install.sh | sh
+   ```
+
+   Windows (PowerShell): `irm https://raw.githubusercontent.com/OpeyemiAdeniji/KubeSift/main/scripts/install.ps1 | iex`
+   ([more](docs/krew.md)).
 
 2. **Check that kubectl reaches your cluster.** KubeSift uses the same kubeconfig and current context.
 
@@ -124,7 +130,7 @@ helm install kubesift oci://ghcr.io/opeyemiadeniji/charts/kubesift -n kubesift -
 | `kubesift snapshot save` | Redacted snapshot to analyse later with `--from` (judged as of when it was taken) or attach to a ticket |
 | `kubesift note add pod-oomkilled "Raised to 1Gi; leak fixed in 3.3"` | Team memory, shown next to matching findings |
 | `kubesift history` | Past investigations |
-| `kubesift serve` | Web dashboard and REST API: incidents with a map of the broken link, live updates from background scans (fixed incidents move to Resolved), redacted pod logs, search and filters |
+| `kubesift serve` | Web dashboard and REST API: incidents with a map of the broken link, live updates from background scans (fixed incidents move to Resolved), redacted pod logs, search and filters ([dashboard](docs/dashboard.md)) |
 | `kubesift mcp` | MCP server for Claude, Cursor, VS Code and other assistants |
 
 Every command takes `-o json`; `diagnose` and `lint` also take `-o markdown` (paste into a ticket or postmortem)

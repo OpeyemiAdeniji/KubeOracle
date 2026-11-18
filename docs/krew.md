@@ -9,7 +9,22 @@ Windows (amd64). No Python needed. Put it on your `PATH` and kubectl finds it as
 | Not included | `serve` (web dashboard) and `mcp` (AI assistants): install with `pip install "kubesift[all]"` or use the Helm chart |
 | Linux | glibc 2.28 or newer: RHEL/Rocky 8+, Amazon Linux 2 and 2023, Ubuntu 20.04+, Debian 10+ (not Alpine/musl: use pip or the image) |
 
-## Install from a release
+## Install with one line
+
+```bash
+# Linux and macOS (installs to ~/.local/share/kubesift, links kubectl-sift and kubesift into your PATH)
+curl -sSfL https://raw.githubusercontent.com/OpeyemiAdeniji/KubeSift/main/scripts/install.sh | sh
+```
+
+```powershell
+# Windows
+irm https://raw.githubusercontent.com/OpeyemiAdeniji/KubeSift/main/scripts/install.ps1 | iex
+```
+
+Both check the download against the release's SHA-256 before installing. `KUBESIFT_VERSION=v2.1.7` pins a
+version. Read the script first if you prefer: it is short.
+
+## Install from a release by hand
 
 ```bash
 # Linux amd64 (other files: kubectl-sift_linux_arm64.tar.gz, _darwin_amd64, _darwin_arm64, _windows_amd64.zip)

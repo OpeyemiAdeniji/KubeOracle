@@ -114,6 +114,10 @@ def create_app(settings: Settings) -> FastAPI:
 
     @app.exception_handler(ValueError)
     async def bad_input(_: Request, exc: ValueError) -> Any:
+        from kubesift.config import ScopeError
+        if isinstance(exc, ScopeError):
+            from fastapi.responses import JSONResponse
+            return JSONResponse({"detail": str(exc)}, status_code=403)
         from fastapi.responses import JSONResponse
         return JSONResponse({"detail": str(exc)}, status_code=400)  # e.g. since=abc, invalid names
     store = open_store(settings)
@@ -139,6 +143,7 @@ def create_app(settings: Settings) -> FastAPI:
             check_name(namespace, "namespace")
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        namespace = settings.scope(namespace)  # out of scope -> 403, not "cannot reach the cluster"
         key = (namespace, context, with_logs)
         now_t = time.monotonic()
         for k in [k for k, v in list(cache.items()) if now_t - v[0] > settings.cache_ttl]:
@@ -192,6 +197,7 @@ def create_app(settings: Settings) -> FastAPI:
         from kubesift.cluster.client import KubeError
         from kubesift.redact import redact
         from kubesift.util import check_name
+        settings.scope(namespace)
         if not settings.dashboard_logs:
             raise HTTPException(status_code=403, detail="log viewing is disabled (dashboard_logs=false)")
         try:
@@ -342,6 +348,7 @@ def create_app(settings: Settings) -> FastAPI:
         if not req.dry_run and not settings.allow_writes:
             raise HTTPException(status_code=403, detail="writes are disabled (set KUBESIFT_ALLOW_WRITES=true)")
         from kubesift.remediate import verification_target
+        settings.scope(req.namespace)
         if req.action == "grant" and not settings.allow_rbac_fixes:
             raise HTTPException(status_code=403, detail="RBAC fixes are disabled (set KUBESIFT_ALLOW_RBAC_FIXES=true)")
         client = KubeClient(kubeconfig=settings.kubeconfig, context=settings.context, timeout=settings.request_timeout)
@@ -396,6 +403,7 @@ def create_app(settings: Settings) -> FastAPI:
             check_name(req.name)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        settings.scope(req.namespace)
         if req.kind.lower() not in KINDS:
             raise HTTPException(status_code=400, detail="kind must be deployment, statefulset, daemonset or pod")
         return {"id": start_verify(req), "status": "running"}

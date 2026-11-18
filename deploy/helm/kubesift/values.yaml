@@ -43,6 +43,13 @@ notifications:
   teamsWebhookUrl: ""
   webhookUrl: ""
 
+# Which namespaces KubeSift covers. exclude: a regex, e.g. "^(dev-|sandbox-)" (system namespaces are already
+# skipped for hygiene checks). only: serve one namespace; requests for others get 403. Note the RBAC stays
+# cluster-wide read (nodes, storage classes, webhooks are cluster-scoped).
+namespaces:
+  exclude: ""
+  only: ""
+
 # Dashboard: the Logs button shows redacted pod logs to anyone with the API token.
 dashboard:
   logs: true

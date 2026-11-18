@@ -31,6 +31,10 @@ _KEY_ENV = {
 }
 
 
+class ScopeError(ValueError):
+    """A namespace outside what this KubeSift is allowed to cover (restrict_namespace)."""
+
+
 class Settings(BaseModel):
     # Cluster access
     kubeconfig: str | None = None
@@ -91,10 +95,26 @@ class Settings(BaseModel):
     github_api_url: str | None = None  # GitHub Enterprise: https://ghe.example.com/api/v3
     ticket_on_alert: bool = False  # open/update an issue for each critical/high incident from alerts and scans
 
+    # Which namespaces this KubeSift covers
+    namespace_exclude: str | None = None  # regex: matching namespaces are left out of all-namespace scans
+    restrict_namespace: str | None = None  # serve only this namespace; requests for others are refused
+
     # Namespaces skipped by default when scanning all namespaces for hygiene checks
     system_namespaces: list[str] = Field(
         default_factory=lambda: ["kube-system", "kube-public", "kube-node-lease", "local-path-storage"]
     )
+
+    def scope(self, namespace: str | None) -> str | None:
+        """The namespace to work on. With restrict_namespace, "all" means that one and any other is refused."""
+        if self.restrict_namespace:
+            if namespace and namespace != self.restrict_namespace:
+                raise ScopeError(f"this KubeSift covers only namespace {self.restrict_namespace}")
+            return self.restrict_namespace
+        return namespace
+
+    def excluded(self, namespace: str | None) -> bool:
+        import re
+        return bool(namespace and self.namespace_exclude and re.search(self.namespace_exclude, namespace))
 
     def resolved_provider(self) -> str:
         p = (self.llm_provider or "auto").lower()

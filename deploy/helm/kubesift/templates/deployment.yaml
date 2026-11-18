@@ -78,6 +78,14 @@ spec:
             {{- end }}
             - name: KUBESIFT_NOTIFY_MIN_SEVERITY
               value: {{ .Values.scan.notifyMinSeverity | quote }}
+            {{- with .Values.namespaces.exclude }}
+            - name: KUBESIFT_NAMESPACE_EXCLUDE
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.namespaces.only }}
+            - name: KUBESIFT_RESTRICT_NAMESPACE
+              value: {{ . | quote }}
+            {{- end }}
             - name: KUBESIFT_DASHBOARD_LOGS
               value: {{ .Values.dashboard.logs | quote }}
             - name: KUBESIFT_ALLOW_WRITES

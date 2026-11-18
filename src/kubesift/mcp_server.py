@@ -189,6 +189,7 @@ def build_server(settings: Settings) -> MCPServer:
         daemonset or pod (a deleted pod: pass its Deployment instead)."""
         from kubesift.cluster.client import KubeClient
         from kubesift.verify import verify
+        settings.scope(namespace)
         client = KubeClient(kubeconfig=settings.kubeconfig, context=settings.context, timeout=settings.request_timeout)
         v = verify(settings, client, kind, namespace, name, timeout=max(10, min(timeout_seconds, 300)), settle=15)
         store.audit("verify", v.target, False, f"{v.status}: {v.summary}", "mcp")
@@ -226,6 +227,7 @@ def build_server(settings: Settings) -> MCPServer:
             resource (one, no wildcards), only when KUBESIFT_ALLOW_RBAC_FIXES=true."""
             from kubesift.cluster.client import KubeClient
             from kubesift.remediate import execute, plan, verification_target
+            settings.scope(namespace)
             if action == "grant" and not settings.allow_rbac_fixes:
                 raise ValueError("RBAC fixes are disabled (KUBESIFT_ALLOW_RBAC_FIXES=true enables them)")
             client = KubeClient(kubeconfig=settings.kubeconfig, context=settings.context, timeout=settings.request_timeout)

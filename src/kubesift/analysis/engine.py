@@ -83,10 +83,22 @@ _MAX_CONTEXT = 60_000
 
 def snapshot_for(settings: Settings, namespace: str | None, context: str | None = None,
                  with_logs: bool = True, kinds: set[str] | None = None) -> Snapshot:
+    namespace = settings.scope(namespace)
     client = KubeClient(kubeconfig=settings.kubeconfig, context=context or settings.context,
                         timeout=settings.request_timeout)
-    return collect(client, namespace=namespace, max_items=settings.max_items_per_kind,
+    snap = collect(client, namespace=namespace, max_items=settings.max_items_per_kind,
                    with_logs=with_logs, kinds=kinds)
+    if namespace is None and settings.namespace_exclude:
+        drop_namespaces(snap, settings)
+    return snap
+
+
+def drop_namespaces(snap: Snapshot, settings: Settings) -> None:
+    """Leave out the namespaces that match namespace_exclude (cluster-scoped objects stay)."""
+    for key, items in snap.objects.items():
+        snap.objects[key] = [o for o in items if not settings.excluded((o.get("metadata") or {}).get("namespace"))
+                             and not (key == "namespaces" and settings.excluded((o.get("metadata") or {}).get("name")))]
+    snap.logs = {k: v for k, v in snap.logs.items() if not settings.excluded(k.split("/", 1)[0])}
 
 
 def investigate(
