@@ -53,6 +53,9 @@ kubesift lint k8s/                # manifests, before they ship
 | If you want to | Read |
 |---|---|
 | See everything KubeSift detects | [All checks](checks.md) |
+| Fix a problem and check the fix worked | [Fixing](fixes.md) |
+| Use the web dashboard (map, live, logs) | [Dashboard](dashboard.md) |
+| Turn incidents into GitHub issues | [Tickets](tickets.md) |
 | Tune it (namespaces, thresholds, AI provider, storage) | [Configuration](configuration.md) |
 | Check a change against the live cluster before deploying | [Preflight](preflight.md) |
 | Use it from Claude, Cursor or VS Code | [AI assistants (MCP)](mcp.md) |

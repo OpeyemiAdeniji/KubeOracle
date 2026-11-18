@@ -58,6 +58,9 @@ nav:
   - Home: index.md
   - Using KubeSift:
       - All checks: checks.md
+      - Fixing, and proving it worked: fixes.md
+      - Dashboard: dashboard.md
+      - Tickets (GitHub issues): tickets.md
       - Configuration: configuration.md
       - Preflight: preflight.md
       - AI assistants (MCP): mcp.md
@@ -65,6 +68,7 @@ nav:
       - Standalone binary and krew: krew.md
   - Operating:
       - Running in production: production.md
+      - Auto-rollback: auto-rollback.md
       - Architecture: architecture.md
       - Releasing: releasing.md
 

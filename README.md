@@ -186,7 +186,9 @@ and `lint` takes `-o sarif` (GitHub code scanning). `--fail-on high` makes CI fa
 
 ## Docs
 
-- [All checks](docs/checks.md) · [Configuration](docs/configuration.md) · [MCP setup](docs/mcp.md) ·
+- [All checks](docs/checks.md) · [Fixing and verifying](docs/fixes.md) · [Dashboard](docs/dashboard.md) ·
+  [Tickets](docs/tickets.md) · [Auto-rollback](docs/auto-rollback.md) · [Configuration](docs/configuration.md) ·
+  [MCP setup](docs/mcp.md) ·
   [Standalone binary and krew](docs/krew.md) ·
   [Preflight](docs/preflight.md) · [Slack](docs/slack.md) · [Production deployment](docs/production.md) · [Architecture](docs/architecture.md) ·
   [Releasing](docs/releasing.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
