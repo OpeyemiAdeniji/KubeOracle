@@ -29,3 +29,7 @@ build/
 e2e-report.json
 kubesift-snapshot.json
 kubesift.sarif
+
+# Docs site build output
+site/
+_site/

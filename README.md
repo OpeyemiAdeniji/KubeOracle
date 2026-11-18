@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/images/logo.svg" alt="KubeSift logo" width="96"></p>
+
 # KubeSift
 
 **Find out what is broken in Kubernetes, why, and what changed — in one command.**
@@ -6,7 +8,7 @@
 [![CI](https://github.com/OpeyemiAdeniji/KubeSift/actions/workflows/ci.yml/badge.svg)](https://github.com/OpeyemiAdeniji/KubeSift/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
-[Website](https://opeyemiadeniji.github.io/KubeSift/) · [Quick start](#quick-start) · [Docs](docs/) · [Production guide](docs/production.md)
+[Website](https://opeyemiadeniji.github.io/KubeSift/) · [Quick start](#quick-start) · [Docs](https://opeyemiadeniji.github.io/KubeSift/docs/) · [Production guide](docs/production.md)
 
 KubeSift reads your cluster, runs 72 deterministic checks, links each failure to the change that most likely
 caused it (a rollout, a ConfigMap edit, a Helm upgrade, a node going away) and tells you the fix, with the
@@ -94,6 +96,15 @@ dashboards, logs, Git and chat. KubeSift answers the on-call questions directly:
   containers, plaintext secrets in env, single replicas.
 - **What is it costing?** Over-requested CPU/memory with right-sizing values from real usage, idle GPUs,
   unused volumes and idle load balancers.
+
+## How it works
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/architecture-dark.svg">
+  <img alt="KubeSift reads the cluster into a redacted snapshot, runs 72 checks and change detection on it, links each problem to the change that likely caused it and explains the fix. It is used from the CLI, a dashboard, AI assistants, CI and alerting; AI is optional." src="docs/images/architecture-light.svg">
+</picture>
+
+More detail: [architecture](docs/architecture.md).
 
 ## Run it in the cluster
 

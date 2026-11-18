@@ -36,6 +36,25 @@ jobs:
       - run: ruff check src tests
       - run: pytest --cov=kubesift --cov-report=term-missing
 
+  docs:
+    # The docs site is built with --strict, so a broken link fails the PR instead of the Pages deploy.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Build the docs site
+        env:
+          NO_MKDOCS_2_WARNING: "1"
+        run: |
+          pip install "mkdocs==1.6.1" "mkdocs-material==9.8.1"
+          mkdocs build --strict
+      - name: The architecture diagram matches its generator
+        run: |
+          python scripts/gen_architecture_svg.py >/dev/null
+          git diff --exit-code docs/images/architecture-light.svg docs/images/architecture-dark.svg
+
   workflows:
     # A broken workflow file is only noticed when it runs; for the release workflow that is too late.
     runs-on: ubuntu-latest

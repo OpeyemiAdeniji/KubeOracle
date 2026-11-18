@@ -1,0 +1,89 @@
+# Docs site: https://opeyemiadeniji.github.io/KubeSift/docs/ (built by .github/workflows/pages.yml).
+# Preview locally: pip install "mkdocs-material==9.8.1" && mkdocs serve
+site_name: KubeSift
+site_description: Find what is broken in Kubernetes, why, and what changed. Evidence-based checks, change correlation and the exact fix.
+site_url: https://opeyemiadeniji.github.io/KubeSift/docs/
+repo_url: https://github.com/OpeyemiAdeniji/KubeSift
+repo_name: OpeyemiAdeniji/KubeSift
+edit_uri: edit/main/docs/
+copyright: Apache-2.0 · KubeSift
+
+docs_dir: docs
+site_dir: site
+# page.html instead of page/: relative image paths in raw HTML (<picture>) then resolve the same as on GitHub
+use_directory_urls: false
+
+theme:
+  name: material
+  logo: images/logo.svg
+  favicon: images/logo.svg
+  icon:
+    repo: fontawesome/brands/github
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle: {icon: material/weather-night, name: Dark mode}
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle: {icon: material/weather-sunny, name: Light mode}
+  features:
+    - navigation.instant
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - search.highlight
+    - search.suggest
+    - content.code.copy
+    - content.tabs.link
+    - toc.follow
+
+extra_css:
+  - stylesheets/kubesift.css
+extra_javascript:
+  - javascripts/picture-theme.js
+
+extra:
+  homepage: https://opeyemiadeniji.github.io/KubeSift/
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/OpeyemiAdeniji/KubeSift
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/kubesift/
+
+nav:
+  - Home: index.md
+  - Using KubeSift:
+      - All checks: checks.md
+      - Configuration: configuration.md
+      - Preflight: preflight.md
+      - AI assistants (MCP): mcp.md
+      - Slack: slack.md
+      - Standalone binary and krew: krew.md
+  - Operating:
+      - Running in production: production.md
+      - Architecture: architecture.md
+      - Releasing: releasing.md
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+
+validation:
+  links:
+    not_found: warn
+    anchors: warn
