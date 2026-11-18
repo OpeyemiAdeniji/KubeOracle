@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 590" width="1200" height="590" role="img" aria-labelledby="t d">
+<title id="t">KubeSift architecture</title>
+<desc id="d">KubeSift reads the cluster, runs checks and change detection on a snapshot, correlates problems with the change that caused them and explains the fix. It is used from the CLI, a dashboard, AI assistants, CI and alerting. AI is optional.</desc>
+<defs><marker id="head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10Z" fill="#8c959f"/></marker></defs>
+<style>.t{font:600 15px system-ui,-apple-system,"Segoe UI",sans-serif;fill:#1f2328;text-anchor:middle}.s{font:13px system-ui,-apple-system,"Segoe UI",sans-serif;fill:#59636e;text-anchor:middle}.h{font:700 12px system-ui,-apple-system,"Segoe UI",sans-serif;fill:#59636e;letter-spacing:.12em}.a{stroke:#8c959f;stroke-width:1.8;fill:none}</style>
+<rect width="1200" height="590" rx="16" fill="#ffffff"/>
+<text x="32" y="48" class="h">USE IT FROM</text>
+<rect x="32" y="66" width="232" height="54" rx="12" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.2"/><text x="148.0" y="98.0" class="t">CLI · kubectl sift</text>
+<rect x="32" y="136" width="232" height="54" rx="12" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.2"/><text x="148.0" y="168.0" class="t">Web dashboard + API</text>
+<rect x="32" y="206" width="232" height="54" rx="12" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.2"/><text x="148.0" y="238.0" class="t">AI assistants (MCP)</text>
+<rect x="32" y="276" width="232" height="54" rx="12" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.2"/><text x="148.0" y="308.0" class="t">CI: GitHub Action, pre-commit</text>
+<rect x="32" y="346" width="232" height="54" rx="12" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.2"/><text x="148.0" y="378.0" class="t">Alertmanager → Slack, Teams</text>
+<path d="M268 237 L296 237" class="a" marker-end="url(#head)"/>
+<rect x="300" y="66" width="600" height="300" rx="16" fill="#eef1f8" stroke="#d0d7de"/>
+<text x="320" y="96" class="h" style="fill:#0d9488">KUBESIFT</text>
+<rect x="320" y="252" width="160" height="84" rx="12" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.2"/><text x="400.0" y="290.0" class="t">Collect</text><text x="400.0" y="311.0" class="s">API, logs, metrics</text>
+<rect x="320" y="112" width="160" height="84" rx="12" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.2"/><text x="400.0" y="150.0" class="t">Snapshot</text><text x="400.0" y="171.0" class="s">redacted, saveable</text>
+<rect x="520" y="112" width="160" height="84" rx="12" fill="#f6f8fa" stroke="#0d9488" stroke-width="1.6"/><text x="600.0" y="150.0" class="t">72 checks</text><text x="600.0" y="171.0" class="s">deterministic findings</text>
+<rect x="520" y="252" width="160" height="84" rx="12" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.2"/><text x="600.0" y="290.0" class="t">Changes</text><text x="600.0" y="311.0" class="s">rollouts, edits, syncs</text>
+<rect x="720" y="112" width="160" height="84" rx="12" fill="#f6f8fa" stroke="#b45309" stroke-width="1.6"/><text x="800.0" y="150.0" class="t">Correlate</text><text x="800.0" y="171.0" class="s">incident + likely trigger</text>
+<rect x="720" y="252" width="160" height="84" rx="12" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.2"/><text x="800.0" y="290.0" class="t">Explain</text><text x="800.0" y="311.0" class="s">rules, or AI checked</text>
+<path d="M400 250 L400 202" class="a" marker-end="url(#head)"/>
+<path d="M482 154 L516 154" class="a" marker-end="url(#head)"/>
+<path d="M482 184 L518 252" class="a" marker-end="url(#head)"/>
+<path d="M682 154 L716 154" class="a" marker-end="url(#head)"/>
+<path d="M682 280 L718 198" class="a" marker-end="url(#head)"/>
+<path d="M800 198 L800 248" class="a" marker-end="url(#head)"/>
+<path d="M882 294 L924 294" class="a" marker-end="url(#head)"/>
+<text x="928" y="48" class="h">YOU GET</text>
+<rect x="928" y="66" width="244" height="62" rx="12" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.2"/><text x="1050.0" y="93.0" class="t">Incidents with evidence</text><text x="1050.0" y="114.0" class="s">symptoms grouped, cause first</text>
+<rect x="928" y="142" width="244" height="62" rx="12" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.2"/><text x="1050.0" y="169.0" class="t">The change that caused it</text><text x="1050.0" y="190.0" class="s">rollout, config edit, Helm/Argo sync</text>
+<rect x="928" y="218" width="244" height="62" rx="12" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.2"/><text x="1050.0" y="245.0" class="t">The fix and exact commands</text><text x="1050.0" y="266.0" class="s">kubectl, rollback, dry run first</text>
+<rect x="928" y="294" width="244" height="62" rx="12" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.2"/><text x="1050.0" y="321.0" class="t">Reports</text><text x="1050.0" y="342.0" class="s">Slack, SARIF, Markdown, postmortem</text>
+<rect x="300" y="404" width="280" height="76" rx="12" fill="#f6f8fa" stroke="#0d9488" stroke-width="1.6"/><text x="440.0" y="438.0" class="t">Your cluster</text><text x="440.0" y="459.0" class="s">Kubernetes API · pod logs · metrics</text>
+<path d="M400 402 L400 338" class="a" marker-end="url(#head)"/>
+<rect x="620" y="404" width="280" height="76" rx="12" fill="#f6f8fa" stroke="#4f46e5" stroke-width="1.6" stroke-dasharray="6 5"/><text x="760.0" y="438.0" class="t">Optional AI, your own key</text><text x="760.0" y="459.0" class="s">Ollama · Anthropic · OpenAI-compatible</text>
+<path d="M800 402 L800 338" class="a" stroke-dasharray="5 5" marker-end="url(#head)"/>
+<text x="600.0" y="540" class="s">Runs on your machine or in your cluster. Read-only by default. Nothing leaves it unless you turn on AI, and then only redacted evidence.</text>
+<text x="600.0" y="562" class="s">AI answers are checked against the findings they cite; without AI, the rule-based diagnosis gives the same incidents and fixes.</text>
+</svg>

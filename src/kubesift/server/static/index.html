@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>KubeSift</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2064%2064%22%20role%3D%22img%22%20aria-label%3D%22KubeSift%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22ks-g%22%20x1%3D%228%22%20y1%3D%226%22%20x2%3D%2256%22%20y2%3D%2258%22%20gradientUnits%3D%22userSpaceOnUse%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%2314b8a6%22/%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%234f46e5%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath%20d%3D%22M32%206%2054.5%2019v26L32%2058%209.5%2045V19Z%22%20fill%3D%22url%28%23ks-g%29%22%20stroke%3D%22url%28%23ks-g%29%22%20stroke-width%3D%226%22%20stroke-linejoin%3D%22round%22/%3E%3Cg%20fill%3D%22%23fff%22%3E%3Ccircle%20cx%3D%2218.8%22%20cy%3D%2220.5%22%20r%3D%222.9%22/%3E%3Ccircle%20cx%3D%2227.6%22%20cy%3D%2220.5%22%20r%3D%222.9%22/%3E%3Ccircle%20cx%3D%2236.4%22%20cy%3D%2220.5%22%20r%3D%222.9%22/%3E%3Ccircle%20cx%3D%2245.2%22%20cy%3D%2220.5%22%20r%3D%222.9%22/%3E%3Ccircle%20cx%3D%2223.2%22%20cy%3D%2229.5%22%20r%3D%222.9%22/%3E%3Ccircle%20cx%3D%2232%22%20cy%3D%2229.5%22%20r%3D%222.9%22/%3E%3Ccircle%20cx%3D%2240.8%22%20cy%3D%2229.5%22%20r%3D%222.9%22/%3E%3Ccircle%20cx%3D%2227.6%22%20cy%3D%2238.5%22%20r%3D%222.9%22/%3E%3Ccircle%20cx%3D%2236.4%22%20cy%3D%2238.5%22%20r%3D%222.9%22/%3E%3C/g%3E%3Ccircle%20cx%3D%2232%22%20cy%3D%2247.8%22%20r%3D%224.5%22%20fill%3D%22%23fbbf24%22/%3E%3C/svg%3E">
 <style>
 :root{--bg:#f6f7f9;--panel:#fff;--text:#1b1f24;--muted:#5d6672;--line:#e3e6ea;--accent:#4b5bdc;
 --crit:#c62828;--high:#e65100;--med:#b58900;--low:#0277bd;--info:#6b7280;--ok:#2e7d32;--code:#f0f2f5}
@@ -11,7 +12,7 @@
 --accent:#8b96ff;--code:#1f252d;--crit:#ef5350;--high:#ff8a50;--med:#e0c050;--low:#4fc3f7;--ok:#66bb6a}}
 *{box-sizing:border-box}body{margin:0;font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text)}
 header{display:flex;gap:16px;align-items:center;padding:12px 20px;border-bottom:1px solid var(--line);background:var(--panel);flex-wrap:wrap}
-header h1{font-size:17px;margin:0}header .meta{color:var(--muted);font-size:12px}
+header h1{font-size:17px;margin:0;display:flex;align-items:center;gap:8px}header .meta{color:var(--muted);font-size:12px}
 nav{display:flex;gap:4px;flex-wrap:wrap}nav button{background:none;border:0;padding:6px 12px;border-radius:6px;color:var(--muted);cursor:pointer;font:inherit}
 nav button.on{background:var(--code);color:var(--text);font-weight:600}
 main{max-width:1180px;margin:0 auto;padding:20px 16px}
@@ -37,7 +38,7 @@ code{padding:1px 5px}pre{padding:8px;white-space:pre-wrap;word-break:break-word;
 </head>
 <body>
 <header>
-  <h1>KubeSift</h1><span class="meta" id="meta"></span>
+  <h1><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="22" height="22" aria-hidden="true"><defs><linearGradient id="ks-g" x1="8" y1="6" x2="56" y2="58" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#14b8a6"/><stop offset="1" stop-color="#4f46e5"/></linearGradient></defs><path d="M32 6 54.5 19v26L32 58 9.5 45V19Z" fill="url(#ks-g)" stroke="url(#ks-g)" stroke-width="6" stroke-linejoin="round"/><g fill="#fff"><circle cx="18.8" cy="20.5" r="2.9"/><circle cx="27.6" cy="20.5" r="2.9"/><circle cx="36.4" cy="20.5" r="2.9"/><circle cx="45.2" cy="20.5" r="2.9"/><circle cx="23.2" cy="29.5" r="2.9"/><circle cx="32" cy="29.5" r="2.9"/><circle cx="40.8" cy="29.5" r="2.9"/><circle cx="27.6" cy="38.5" r="2.9"/><circle cx="36.4" cy="38.5" r="2.9"/></g><circle cx="32" cy="47.8" r="4.5" fill="#fbbf24"/></svg>KubeSift</h1><span class="meta" id="meta"></span>
   <nav id="nav"></nav>
 </header>
 <main id="main"></main>
