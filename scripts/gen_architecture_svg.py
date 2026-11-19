@@ -26,7 +26,7 @@ GET = [("Incidents with evidence", "symptoms grouped, cause first"),
        ("Reports", "Slack, SARIF, Markdown, postmortem")]
 # (column, row, title, subtitle); columns at x = 320/520/720, rows at y = 112/252
 STAGES = [(0, 1, "Collect", "API, logs, metrics"), (0, 0, "Snapshot", "redacted, saveable"),
-          (1, 0, "72 checks", "deterministic findings"), (1, 1, "Changes", "rollouts, edits, syncs"),
+          (1, 0, "73 checks", "deterministic findings"), (1, 1, "Changes", "rollouts, edits, syncs"),
           (2, 0, "Correlate", "incident + likely trigger"), (2, 1, "Explain", "rules, or AI checked")]
 
 
@@ -74,7 +74,7 @@ def svg(theme: str) -> str:
     p.append(f'<text x="320" y="96" class="h" style="fill:{c["teal"]}">KUBESIFT</text>')
     xs, ys, bw, bh = (320, 520, 720), (112, 252), 160, 84
     for col, row, title, sub in STAGES:
-        accent = "amber" if title == "Correlate" else ("teal" if title == "72 checks" else None)
+        accent = "amber" if title == "Correlate" else ("teal" if title == "73 checks" else None)
         p.append(box(c, xs[col], ys[row], bw, bh, title, sub, accent))
     p += [arrow(400, 250, 400, 202),                 # collect -> snapshot
           arrow(482, 154, 516, 154),                 # snapshot -> checks

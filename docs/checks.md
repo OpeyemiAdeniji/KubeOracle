@@ -1,6 +1,6 @@
 # Checks
 
-KubeSift runs 72 checks. **Problems** are broken now; **risks** will hurt later. Checks marked *lint* also run on manifest files (`kubesift lint`), without a cluster.
+KubeSift runs 73 checks. **Problems** are broken now; **risks** will hurt later. Checks marked *lint* also run on manifest files (`kubesift lint`), without a cluster.
 
 Regenerate this page with `python scripts/gen_check_docs.py`.
 
@@ -217,6 +217,12 @@ The kubelet stopped reporting or reports itself unhealthy; pods on it are being 
 **Node is under resource pressure** · high · problem
 
 MemoryPressure / DiskPressure / PIDPressure: the kubelet is evicting pods.
+
+### node-restarted
+
+**Node restarted** · low · problem
+
+The node (or its container runtime) restarted recently and its containers restarted with it.
 
 ## Scheduling
 
