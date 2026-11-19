@@ -74,6 +74,7 @@
     <div class="install" data-tabs>
       <div class="tabs" role="tablist" aria-label="Install method">
         <button role="tab" aria-selected="true" data-cmd="pipx install &quot;kubesift[all]&quot;">pipx</button>
+        <button role="tab" aria-selected="false" data-cmd="curl -sSfL https://raw.githubusercontent.com/OpeyemiAdeniji/KubeSift/main/scripts/install.sh | sh">No Python</button>
         <button role="tab" aria-selected="false" data-cmd="kubectl sift diagnose -n shop">kubectl</button>
         <button role="tab" aria-selected="false" data-cmd="helm install kubesift oci://ghcr.io/opeyemiadeniji/charts/kubesift -n kubesift --create-namespace">Helm</button>
         <button role="tab" aria-selected="false" data-cmd="claude mcp add kubesift -- kubesift mcp">MCP</button>
@@ -128,8 +129,9 @@ $ kubectl rollout undo deployment/checkout -n shop --to-revision=1</pre>
   <div class="wrap">
     <p class="eyebrow">Get started</p>
     <h2>Running in five minutes.</h2>
-    <p class="sub">You need Python 3.10 or newer and a cluster that <code>kubectl</code> can reach. KubeSift only reads your
-      cluster; it changes nothing unless you run <code>kubesift fix</code> and confirm.</p>
+    <p class="sub">You need a cluster that <code>kubectl</code> can reach, and Python 3.10 or newer (or nothing at all, with the
+      standalone binary). KubeSift only reads your cluster; it changes nothing unless you run <code>kubesift fix</code> and
+      confirm.</p>
     <ol class="start">
       <li class="start-step">
         <div>
@@ -137,6 +139,10 @@ $ kubectl rollout undo deployment/checkout -n shop --to-revision=1</pre>
           <pre><code><span class="c">$</span> pipx install "kubesift[all]"</code></pre>
           <p>No pipx? Run <code>python -m pip install --user pipx</code> and <code>python -m pipx ensurepath</code>, then open a
             new terminal. <code>pip install "kubesift[all]"</code> in a virtualenv works too.</p>
+          <p>No Python? One line installs the standalone <code>kubectl-sift</code> for Linux and macOS, checksum-verified:</p>
+          <pre><code><span class="c">$</span> curl -sSfL https://raw.githubusercontent.com/OpeyemiAdeniji/KubeSift/main/scripts/install.sh &#124; sh</code></pre>
+          <p>Windows: <code>irm https://raw.githubusercontent.com/OpeyemiAdeniji/KubeSift/main/scripts/install.ps1 &#124; iex</code>.
+            The standalone binary has every command except the dashboard and MCP server.</p>
         </div>
       </li>
       <li class="start-step">
@@ -245,7 +251,9 @@ $ kubectl rollout undo deployment/checkout -n shop --to-revision=1</pre>
     <div class="catch-grid">
       <article class="catch reveal"><h3>Preflight</h3><p>Before deploy, check the change against the <b>live</b> cluster: missing Secrets, pods that won't fit, a memory limit below what the app uses today, env vars the running version needs, webhook rejections.</p></article>
       <article class="catch reveal"><h3>Diagnose</h3><p>When something breaks: the cause, the change that triggered it, and the rollback — in your terminal, AI assistant, dashboard or Slack.</p></article>
+      <article class="catch reveal"><h3>Fix &amp; verify</h3><p>Roll back, re-point a Service, raise a memory limit or grant one missing permission: dry-run first, your approval, then KubeSift waits for the rollout and re-checks. <b>Resolved</b> or <b>still failing</b>, with the reason.</p></article>
       <article class="catch reveal"><h3>Time travel</h3><p>Compare the cluster now with an hour ago. See every image, config key, replica count and node that changed, even ones Kubernetes doesn't record.</p></article>
+      <article class="catch reveal"><h3>Tickets</h3><p>Turn an incident into a GitHub issue with the evidence, the change that caused it, the fix and how to verify it. One issue per incident: repeats become comments.</p></article>
       <article class="catch reveal"><h3>Postmortem</h3><p>One command drafts a blameless postmortem: impact, timeline, root cause, triggering change and action items, built from cluster evidence.</p></article>
       <article class="catch reveal"><h3>On-call in Slack</h3><p><code>/sift why checkout</code> in a channel. Answers with evidence and a "Roll back (dry run)" button. Applying needs your approval and permission.</p></article>
       <article class="catch reveal"><h3>Fire drills</h3><p><code>kubesift drill start crashloop</code> safely breaks a training namespace so new engineers practise on realistic failures.</p></article>
@@ -282,8 +290,8 @@ https://kubesift.your-co.com/mcp</code></pre>
       <article class="way reveal">
         <span class="way-tag">03 · In the cluster</span>
         <h3>Dashboard, API &amp; alerts</h3>
-        <p>Helm chart with a web dashboard, REST API, Alertmanager receiver and background scans that post the diagnosis
-          to Slack or Teams before anyone opens a laptop.</p>
+        <p>Helm chart with a live web dashboard, REST API, Alertmanager receiver and background scans that post the
+          diagnosis to Slack or Teams before anyone opens a laptop.</p>
         <pre><code><span class="c">$</span> helm install kubesift \
     oci://ghcr.io/opeyemiadeniji/charts/kubesift \
     --set notifications.slackWebhookUrl=$SLACK</code></pre>
@@ -307,7 +315,9 @@ https://kubesift.your-co.com/mcp</code></pre>
   <div class="wrap">
     <p class="eyebrow">In-cluster dashboard</p>
     <h2>Incidents, not alerts.</h2>
-    <p class="sub">Pods on a dead node become one infrastructure incident. A bad rollout and its crashing pods become one app incident.</p>
+    <p class="sub">Pods on a dead node become one infrastructure incident. A bad rollout and its crashing pods become one app
+      incident. Each one has a map with the broken link in red, the pod logs a click away, and in Live mode fixed
+      incidents move to <b>Resolved</b> on their own.</p>
     <div class="dash reveal" role="img" aria-label="Mock-up of the KubeSift dashboard showing incidents, recent changes and counts">
       <div class="dash-side">
         <div class="dash-brand"><img src="favicon.svg" alt="" width="18" height="18"> KubeSift</div>
@@ -332,6 +342,10 @@ https://kubesift.your-co.com/mcp</code></pre>
         <div class="dash-card">
           <div class="dash-row"><span class="badge high">high</span><b>Secret/shop/shop-tls</b><span class="muted">security</span></div>
           <p>Certificate expires in 3 days; cert-manager renewal is failing.</p>
+        </div>
+        <div class="dash-card dash-resolved">
+          <div class="dash-row"><span class="badge ok">resolved</span><b>Service/shop/web</b><span class="muted">14:21</span></div>
+          <p>Had no endpoints (selector <code>app=wbe</code>). Fixed with <code>set-selector</code>; verified: 2 ready endpoints.</p>
         </div>
       </div>
     </div>
@@ -366,10 +380,10 @@ https://kubesift.your-co.com/mcp</code></pre>
     <div class="trust-grid">
       <article class="trust reveal"><span class="ico">◎</span><h3>AI is optional</h3><p>Every finding comes from deterministic checks. Bring Claude, OpenAI, OpenRouter or a local Ollama model — or none at all.</p></article>
       <article class="trust reveal"><span class="ico">⛨</span><h3>Your secrets stay yours</h3><p>Secret and ConfigMap values are dropped at read time. Tokens, passwords and keys are redacted from logs before anything is stored or sent.</p></article>
-      <article class="trust reveal"><span class="ico">↺</span><h3>Guarded fixes</h3><p>Restart, rollback and scale show a plan, run a server-side dry run, ask before changing anything, and write an audit log.</p></article>
+      <article class="trust reveal"><span class="ico">↺</span><h3>Guarded, verified fixes</h3><p>Every fix shows a plan, runs a server-side dry run, asks before changing anything, writes an audit log, then checks it actually worked. Auto-rollback of a just-broken rollout is opt-in, per namespace.</p></article>
       <article class="trust reveal"><span class="ico">⇄</span><h3>Highly available</h3><p>Run two or more replicas on PostgreSQL. A Kubernetes Lease elects one scanner; failover takes seconds.</p></article>
       <article class="trust reveal"><span class="ico">✓</span><h3>Signed releases</h3><p>Container images and Helm charts are signed with cosign and ship an SBOM and build provenance.</p></article>
-      <article class="trust reveal"><span class="ico">⌁</span><h3>Tested on real clusters</h3><p>Every change breaks a kind cluster in ten ways and checks each failure is caught, then installs the chart in both modes.</p></article>
+      <article class="trust reveal"><span class="ico">⌁</span><h3>Tested on real clusters</h3><p>Every change breaks a kind cluster in eleven ways and checks each failure is caught, then installs the chart in both modes.</p></article>
     </div>
   </div>
 </section>

@@ -174,7 +174,15 @@ def test_saved_snapshot_is_judged_as_of_when_it_was_taken(snapshot_file, monkeyp
     """Read 10 days later, a snapshot must still say 'NotReady for 40m' and '3 days' left on the certificate."""
     from datetime import datetime, timedelta, timezone
 
+    from fixtures import NOW
+
     import kubesift.util
+
+    # The fixture's "40 minutes ago" is relative to fixtures.NOW; stamp the snapshot with that same moment, or a slow
+    # machine (more than a minute between importing fixtures and saving the file) turns 40m into 41m.
+    data = json.loads(snapshot_file.read_text(encoding="utf-8"))
+    data["collected_at"] = NOW.isoformat()
+    snapshot_file.write_text(json.dumps(data), encoding="utf-8")
 
     later = datetime.now(timezone.utc) + timedelta(days=10)
 
