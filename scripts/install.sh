@@ -86,6 +86,21 @@ say "Installed $("$bin_dir/kubectl-sift" version) to $install_dir"
 say "Commands: $bin_dir/kubectl-sift and $bin_dir/kubesift"
 case ":$PATH:" in
   *":$bin_dir:"*) ;;
-  *) say "Add $bin_dir to your PATH, e.g.: echo 'export PATH=\"$bin_dir:\$PATH\"' >> ~/.profile" ;;
+  *)
+    # Name the file the user's shell actually reads (macOS defaults to zsh, which ignores ~/.profile).
+    case "${SHELL:-}" in
+      */zsh) rc="$HOME/.zshrc" ;;
+      */bash) if [ "$os" = darwin ]; then rc="$HOME/.bash_profile"; else rc="$HOME/.bashrc"; fi ;;
+      */fish) rc="" ;;
+      *) rc="$HOME/.profile" ;;
+    esac
+    say ""
+    say "$bin_dir is not on your PATH yet. Add it, then open a new terminal:"
+    if [ -z "$rc" ]; then
+      say "  fish_add_path $bin_dir"
+    else
+      say "  echo 'export PATH=\"$bin_dir:\$PATH\"' >> $rc"
+    fi
+    ;;
 esac
 say "Try: kubectl sift diagnose"
