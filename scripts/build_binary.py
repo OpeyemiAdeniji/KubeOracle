@@ -56,8 +56,14 @@ def pack(folder: Path) -> Path:
                 z.write(f, Path(NAME) / f.relative_to(folder))
     else:
         out = DIST / f"{stem}.tar.gz"
-        with tarfile.open(out, "w:gz") as t:
+        # dereference: store the files links point to, not the links. krew cannot unpack symbolic links, and the
+        # macOS build has some (Python.framework); 2.2.0's macOS archive failed with "unable to handle file type 50".
+        with tarfile.open(out, "w:gz", dereference=True) as t:
             t.add(folder, arcname=NAME)
+        with tarfile.open(out) as t:
+            links = [m.name for m in t.getmembers() if m.issym() or m.islnk()]
+        if links:
+            sys.exit(f"{out.name} still contains links, which krew cannot unpack: {links[:5]}")
     digest = hashlib.sha256(out.read_bytes()).hexdigest()
     # newline="\n": in text mode Windows writes \r\n, and `sha256sum -c` then can't find the file.
     (DIST / f"{out.name}.sha256").write_text(f"{digest}  {out.name}\n", encoding="utf-8", newline="\n")

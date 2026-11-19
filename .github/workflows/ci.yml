@@ -168,6 +168,7 @@ jobs:
       matrix:
         include:
           - {os: linux, runner: ubuntu-latest, container: "quay.io/pypa/manylinux_2_28_x86_64"}
+          - {os: darwin, runner: macos-15}   # macOS builds contain links that krew can't unpack (2.2.0)
           - {os: windows, runner: windows-latest}
     runs-on: ${{ matrix.runner }}
     container: ${{ matrix.container }}
@@ -186,15 +187,22 @@ jobs:
           python scripts/build_binary.py
       - name: Checksum files can be checked with sha256sum (the 2.1.7 Windows one had \r\n)
         shell: bash
-        run: cd dist && sha256sum -c ./*.sha256
-      - name: The krew manifest is valid YAML with every field filled
-        if: matrix.os == 'linux'
         run: |
-          for p in linux_arm64.tar.gz darwin_amd64.tar.gz darwin_arm64.tar.gz windows_amd64.zip; do
-            echo "$(printf 'ab%.0s' $(seq 32))  x" > "dist/kubectl-sift_$p.sha256"
+          cd dist
+          if command -v sha256sum >/dev/null; then sha256sum -c ./*.sha256; else shasum -a 256 -c ./*.sha256; fi
+      - name: krew installs the archive with the manifest, as users and krew reviewers do
+        if: matrix.os != 'windows'
+        shell: bash
+        run: |
+          py=$([ -x /tmp/kubesift-build/bin/python ] && echo /tmp/kubesift-build/bin/python || echo python)
+          arch=$(uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/arm64/')
+          for p in linux_amd64.tar.gz linux_arm64.tar.gz darwin_amd64.tar.gz darwin_arm64.tar.gz windows_amd64.zip; do
+            [ -f "dist/kubectl-sift_$p.sha256" ] || echo "$(printf 'ab%.0s' $(seq 32))  x" > "dist/kubectl-sift_$p.sha256"
           done
-          /tmp/kubesift-build/bin/python scripts/krew_manifest.py v0.0.0 dist
-          /tmp/kubesift-build/bin/python -c "import yaml; m = yaml.safe_load(open('dist/sift.yaml')); assert len(m['spec']['platforms']) == 5 and all(len(p['sha256']) == 64 for p in m['spec']['platforms'])"
+          "$py" scripts/krew_manifest.py v0.0.0 dist
+          curl -fsSL "https://github.com/kubernetes-sigs/krew/releases/download/v0.5.0/krew-${{ matrix.os }}_${arch}.tar.gz" | tar -xz -C /tmp
+          "/tmp/krew-${{ matrix.os }}_${arch}" install --manifest=dist/sift.yaml --archive="dist/kubectl-sift_${{ matrix.os }}_${arch}.tar.gz"
+          "$HOME/.krew/bin/kubectl-sift" version
 
   e2e:
     runs-on: ubuntu-latest
