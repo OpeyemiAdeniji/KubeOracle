@@ -2,8 +2,8 @@ apiVersion: v2
 name: kubesift
 description: Evidence-based Kubernetes troubleshooting service (dashboard, API, Alertmanager receiver, background scans)
 type: application
-version: 2.2.0
-appVersion: "2.2.0"
+version: 2.2.1
+appVersion: "2.2.1"
 home: https://opeyemiadeniji.github.io/KubeSift/
 sources:
   - https://github.com/OpeyemiAdeniji/KubeSift
@@ -19,7 +19,7 @@ annotations:
   artifacthub.io/category: monitoring-logging
   artifacthub.io/images: |
     - name: kubesift
-      image: ghcr.io/opeyemiadeniji/kubesift:2.2.0
+      image: ghcr.io/opeyemiadeniji/kubesift:2.2.1
   artifacthub.io/links: |
     - name: Website
       url: https://opeyemiadeniji.github.io/KubeSift/
@@ -29,15 +29,9 @@ annotations:
       url: https://opeyemiadeniji.github.io/KubeSift/docs/production.html
   # What changed in this version (shown on Artifact Hub). Kinds: added, changed, deprecated, removed, fixed, security.
   artifacthub.io/changes: |
-    - kind: added
-      description: Verified fixes - after a fix KubeSift waits for the rollout, watches the pods and re-checks; kubesift verify works after any change
-    - kind: added
-      description: New fixes set-selector, set-memory and grant (opt-in for the service with rbac.allowRbacFixes), plus opt-in auto-rollback of a just-broken rollout (autoRollback.namespaces)
-    - kind: added
-      description: Incidents as GitHub issues (kubesift ticket, API, Slack button, MCP) without duplicates; tickets.* values
-    - kind: added
-      description: Dashboard incident map, Live mode with a Resolved list, redacted pod logs, search and filters; dashboard.logs value
-    - kind: added
-      description: namespaces.exclude and namespaces.only values; one-line installers for the standalone binary
     - kind: fixed
-      description: Rollback skips revisions that only restarted the current version, so it no longer brings back the same broken pods
+      description: A node or Docker restart no longer shows as crash loops in every system pod; one low-severity node-restarted note says what happened (73 checks)
+    - kind: fixed
+      description: macOS binaries install with krew (the archives no longer contain symbolic links, which krew cannot unpack)
+    - kind: fixed
+      description: The one-line installer names the right shell file for PATH (zsh on macOS, bash, fish)
