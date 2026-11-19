@@ -18,6 +18,9 @@ _LAYER = {
 }
 
 
+# Node findings that describe something past (the node is fine now); they never take a node's pods with them.
+NODE_NOTES = {"node-restarted"}
+
 # Findings that describe an effect; the pod-level finding next to them usually names the cause.
 SYMPTOMS = {"deployment-unavailable", "statefulset-unready", "daemonset-unavailable", "deployment-rollout-stuck",
             "pod-not-ready"}
@@ -100,13 +103,17 @@ def build_incidents(snap: Snapshot, findings: list[Finding]) -> list[Incident]:
     problems = [f for f in findings if f.kind == "problem"]
     groups: dict[str, list[Finding]] = {}
 
-    # Infra first: a broken node explains the pod failures on it.
-    bad_nodes = {f.resource.name for f in problems if f.category == Category.NODE and f.resource.kind == "Node"}
+    # Infra first: a broken node explains the pod failures on it. A node that restarted and is healthy again is a
+    # note of its own: it doesn't explain a pod that is failing now (a bad image tag stays the app's problem).
+    def node_problem(f: Finding) -> bool:
+        return f.category == Category.NODE and f.resource.kind == "Node" and f.check not in NODE_NOTES
+
+    bad_nodes = {f.resource.name for f in problems if node_problem(f)}
     for f in problems:
-        if f.category == Category.NODE and f.resource.kind == "Node":
+        if node_problem(f):
             groups.setdefault(f"node:{f.resource.name}", []).append(f)
     for f in problems:
-        if f.category == Category.NODE and f.resource.kind == "Node":
+        if node_problem(f):
             continue
         if f.node and f.node in bad_nodes:
             groups[f"node:{f.node}"].append(f)
