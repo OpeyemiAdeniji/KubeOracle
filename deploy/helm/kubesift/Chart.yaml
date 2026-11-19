@@ -2,8 +2,8 @@ apiVersion: v2
 name: kubesift
 description: Evidence-based Kubernetes troubleshooting service (dashboard, API, Alertmanager receiver, background scans)
 type: application
-version: 2.1.7
-appVersion: "2.1.7"
+version: 2.2.0
+appVersion: "2.2.0"
 home: https://opeyemiadeniji.github.io/KubeSift/
 sources:
   - https://github.com/OpeyemiAdeniji/KubeSift
@@ -19,25 +19,25 @@ annotations:
   artifacthub.io/category: monitoring-logging
   artifacthub.io/images: |
     - name: kubesift
-      image: ghcr.io/opeyemiadeniji/kubesift:2.1.7
+      image: ghcr.io/opeyemiadeniji/kubesift:2.2.0
   artifacthub.io/links: |
     - name: Website
       url: https://opeyemiadeniji.github.io/KubeSift/
     - name: Documentation
-      url: https://github.com/OpeyemiAdeniji/KubeSift/tree/main/docs
+      url: https://opeyemiadeniji.github.io/KubeSift/docs/
     - name: Production guide
-      url: https://github.com/OpeyemiAdeniji/KubeSift/blob/main/docs/production.md
-  # Set when the release fixes vulnerabilities in the image or its dependencies.
-  artifacthub.io/containsSecurityUpdates: "true"
+      url: https://opeyemiadeniji.github.io/KubeSift/docs/production.html
   # What changed in this version (shown on Artifact Hub). Kinds: added, changed, deprecated, removed, fixed, security.
   artifacthub.io/changes: |
-    - kind: security
-      description: The image now runs on Chainguard's Wolfi Python base with no shell or package manager; Artifact Hub's scan goes from 48 high and 98 medium findings to none
     - kind: added
-      description: Standalone kubectl-sift binaries for Linux, macOS and Windows (no Python needed) and a krew manifest with every release
-    - kind: changed
-      description: Releases are signed with cosign 3 (Sigstore bundles) and verified in the release workflow; verify with cosign 3 or newer
+      description: Verified fixes - after a fix KubeSift waits for the rollout, watches the pods and re-checks; kubesift verify works after any change
+    - kind: added
+      description: New fixes set-selector, set-memory and grant (opt-in for the service with rbac.allowRbacFixes), plus opt-in auto-rollback of a just-broken rollout (autoRollback.namespaces)
+    - kind: added
+      description: Incidents as GitHub issues (kubesift ticket, API, Slack button, MCP) without duplicates; tickets.* values
+    - kind: added
+      description: Dashboard incident map, Live mode with a Resolved list, redacted pod logs, search and filters; dashboard.logs value
+    - kind: added
+      description: namespaces.exclude and namespaces.only values; one-line installers for the standalone binary
     - kind: fixed
-      description: MCP tools report why a call failed (cluster unreachable, not found, invalid input) instead of a bare error
-    - kind: changed
-      description: A brand-new Deployment reads "was created" instead of "rolled out revision 1"
+      description: Rollback skips revisions that only restarted the current version, so it no longer brings back the same broken pods

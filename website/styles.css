@@ -160,6 +160,7 @@ h3 { font-size: 19px; letter-spacing: -.015em; margin: 0 0 8px; }
 .timeline code, .dash code { font-size: 12.5px; background: var(--panel-2); border: 1px solid var(--line); padding: 1px 6px; border-radius: 6px; word-break: break-word; }
 
 .badge { font: 700 11px var(--mono); text-transform: uppercase; letter-spacing: .06em; padding: 3px 8px; border-radius: 6px; color: #fff; }
+.badge.ok { background: var(--ok); color: #04261c; } .dash-resolved { opacity: .8; }
 .badge.crit { background: var(--crit); } .badge.high { background: var(--high); } .badge.med { background: var(--med); color: #1a1300; }
 
 /* WAYS */
