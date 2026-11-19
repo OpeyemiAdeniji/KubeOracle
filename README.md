@@ -10,7 +10,7 @@
 
 [Website](https://opeyemiadeniji.github.io/KubeSift/) · [Quick start](#quick-start) · [Docs](https://opeyemiadeniji.github.io/KubeSift/docs/) · [Production guide](docs/production.md)
 
-KubeSift reads your cluster, runs 72 deterministic checks, links each failure to the change that most likely
+KubeSift reads your cluster, runs 73 deterministic checks, links each failure to the change that most likely
 caused it (a rollout, a ConfigMap edit, a Helm upgrade, a node going away) and tells you the fix, with the
 exact commands. An LLM is optional: it ranks and explains the evidence, it never invents it.
 
@@ -101,7 +101,7 @@ dashboards, logs, Git and chat. KubeSift answers the on-call questions directly:
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/architecture-dark.svg">
-  <img alt="KubeSift reads the cluster into a redacted snapshot, runs 72 checks and change detection on it, links each problem to the change that likely caused it and explains the fix. It is used from the CLI, a dashboard, AI assistants, CI and alerting; AI is optional." src="docs/images/architecture-light.svg">
+  <img alt="KubeSift reads the cluster into a redacted snapshot, runs 73 checks and change detection on it, links each problem to the change that likely caused it and explains the fix. It is used from the CLI, a dashboard, AI assistants, CI and alerting; AI is optional." src="docs/images/architecture-light.svg">
 </picture>
 
 More detail: [architecture](docs/architecture.md).

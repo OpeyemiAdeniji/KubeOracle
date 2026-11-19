@@ -10,7 +10,7 @@ from typing import Any
 from kubesift.checks.base import Context, check
 from kubesift.denials import classify_denial
 from kubesift.models import Category, Finding, Severity
-from kubesift.util import age, containers_of, fmt_bytes, human_duration, meta, parse_quantity, parse_time
+from kubesift.util import age, containers_of, fmt_bytes, human_duration, meta, now, parse_quantity, parse_time
 
 EXIT_CODES = {
     0: "exited successfully, but the pod expects a long-running process (restartPolicy: Always)",
@@ -114,6 +114,69 @@ def is_crash_looping(cs: dict[str, Any]) -> bool:
     return False
 
 
+# When a node (or the Docker/containerd under it) restarts, every container on it stops at the same moment and
+# Kubernetes records the reason as "Unknown" (exit code 255). That is one event, not many crash loops: on a laptop it
+# is Docker Desktop or the computer restarting; on a server, the node rebooting.
+NODE_RESTART_MIN_CONTAINERS = 3
+NODE_RESTART_WINDOW = timedelta(seconds=90)    # containers stopped within this of each other
+NODE_RESTART_FALLOUT = timedelta(minutes=3)    # failures right after, while the API was still coming back
+
+
+def node_restarts(ctx: Context) -> dict[str, tuple[Any, int]]:
+    """{node: (when it restarted, how many containers stopped with it)}, from the containers' last terminations."""
+    cached = getattr(ctx, "_node_restarts", None)
+    if cached is not None:
+        return cached
+    stops: dict[str, list[Any]] = {}
+    for pod in ctx.snap.all("pods"):
+        node = (pod.get("spec") or {}).get("nodeName")
+        for cs, _ in _statuses(pod):
+            last = (cs.get("lastState") or {}).get("terminated") or {}
+            when = parse_time(last.get("finishedAt"))
+            if node and when and last.get("reason") == "Unknown":
+                stops.setdefault(node, []).append(when)
+    found: dict[str, tuple[Any, int]] = {}
+    for node, times in stops.items():
+        times.sort()
+        for i, t in enumerate(times):  # the largest group of stops within the window
+            n = sum(1 for u in times[i:] if u - t <= NODE_RESTART_WINDOW)
+            if n >= NODE_RESTART_MIN_CONTAINERS and n > found.get(node, (None, 0))[1]:
+                found[node] = (t, n)
+    ctx._node_restarts = found  # type: ignore[attr-defined]  # computed once per run, used by three checks
+    return found
+
+
+def restarted_with_node(ctx: Context, pod: dict[str, Any], cs: dict[str, Any]) -> bool:
+    """The container is running again and its last stop was its node restarting (or the minutes right after)."""
+    if not (cs.get("state") or {}).get("running"):
+        return False
+    restart = node_restarts(ctx).get((pod.get("spec") or {}).get("nodeName") or "")
+    when = parse_time(((cs.get("lastState") or {}).get("terminated") or {}).get("finishedAt"))
+    return bool(restart and when and restart[0] - NODE_RESTART_WINDOW <= when <= restart[0] + NODE_RESTART_FALLOUT)
+
+
+@check("node-restarted", "Node restarted", Category.NODE, Severity.LOW)
+def node_restarted(ctx: Context) -> Iterator[Finding]:
+    """The node (or its container runtime) restarted recently and its containers restarted with it."""
+    for node, (when, count) in sorted(node_restarts(ctx).items()):
+        if now() - when > timedelta(hours=24):
+            continue
+        obj = ctx.snap.get("nodes", None, node) or {"kind": "Node", "metadata": {"name": node}}
+        yield ctx.finding(
+            "node-restarted", obj,
+            f"Node {node} (or the container runtime on it) restarted at {when:%H:%M} UTC; {count} containers "
+            "stopped at that moment and restarted with it. Their restart counts come from this, not from crashes.",
+            evidence=[f"{count} containers last stopped with reason Unknown within {NODE_RESTART_WINDOW.seconds}s "
+                      f"of {when.isoformat()}"],
+            remediation="On a laptop (kind, minikube, Docker Desktop) this is Docker or the computer restarting and needs "
+                        "no action. On a server, find out why the node rebooted (maintenance, a crash, the cloud "
+                        "provider) before it happens again.",
+            commands=[f"kubectl describe node {node}", f"kubectl get events -A --field-selector involvedObject.name={node}"],
+            since=when,
+            node=node,
+        )
+
+
 @check("pod-crashloop", "Container is crash looping", Category.WORKLOAD, Severity.CRITICAL)
 def crashloop(ctx: Context) -> Iterator[Finding]:
     """A container keeps exiting with an error and Kubernetes keeps restarting it."""
@@ -121,7 +184,7 @@ def crashloop(ctx: Context) -> Iterator[Finding]:
         if meta(pod).get("deletionTimestamp"):
             continue
         for cs, is_init in _statuses(pod):
-            if not is_crash_looping(cs):
+            if not is_crash_looping(cs) or restarted_with_node(ctx, pod, cs):
                 continue
             last = (cs.get("lastState") or {}).get("terminated") or (cs.get("state") or {}).get("terminated") or {}
             code = last.get("exitCode")
@@ -406,7 +469,7 @@ def restarting(ctx: Context) -> Iterator[Finding]:
         for cs, _ in _statuses(pod):
             restarts = cs.get("restartCount", 0)
             state = cs.get("state") or {}
-            if restarts < 5 or not state.get("running") or is_crash_looping(cs):
+            if restarts < 5 or not state.get("running") or is_crash_looping(cs) or restarted_with_node(ctx, pod, cs):
                 continue
             last = (cs.get("lastState") or {}).get("terminated") or {}
             if last.get("reason") == "OOMKilled":
