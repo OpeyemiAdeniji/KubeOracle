@@ -58,3 +58,28 @@ def test_one_container_stopping_with_unknown_is_not_a_node_restart(settings):
     snap = make(pods=[back_up("worker-1", 4, minutes_ago=2, ns="shop")], nodes=[{"kind": "Node", "metadata": {"name": NODE}}])
     found = {f.check for f in run_checks(snap, settings)}
     assert "node-restarted" not in found and "pod-crashloop" in found
+
+
+def test_a_node_restart_does_not_take_the_apps_problem_with_it(settings):
+    """On the Mac, the bad image tag showed up as "Node/kubernetes-cluster-control-plane: Image cannot be pulled"."""
+    from kubesift.analysis.correlate import build_incidents
+
+    snap = laptop_after_docker_restart()
+    incidents = build_incidents(snap, run_checks(snap, settings))
+    image = next(i for i in incidents if any(f.check == "pod-image-pull" for f in i.findings))
+    assert image.root.kind != "Node" and image.layer != "infra", image.title
+    assert not any(f.check == "node-restarted" for f in image.findings)
+    note = next(i for i in incidents if any(f.check == "node-restarted" for f in i.findings))
+    assert [f.check for f in note.findings] == ["node-restarted"] and note.severity.value == "low"
+    assert incidents[0] is image  # the real problem comes first
+
+
+def test_a_broken_node_still_explains_its_pods(settings):
+    from kubesift.analysis.correlate import build_incidents
+
+    snap = laptop_after_docker_restart()
+    snap.objects["nodes"][0]["status"] = {"conditions": [{"type": "Ready", "status": "False", "reason": "KubeletNotReady",
+                                                          "lastTransitionTime": "2026-01-01T00:00:00Z"}]}
+    incidents = build_incidents(snap, run_checks(snap, settings))
+    node = [i for i in incidents if i.root.kind == "Node" and i.layer == "infra"]
+    assert node and any(f.check == "pod-image-pull" for f in node[0].findings), [i.title for i in incidents]
