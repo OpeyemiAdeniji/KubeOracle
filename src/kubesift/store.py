@@ -52,7 +52,7 @@ class Store:
             path = Path(data_dir).expanduser()
             path.mkdir(parents=True, exist_ok=True)
             self.path = path / "kubesift.db"
-            self._db = sqlite3.connect(self.path, check_same_thread=False)
+            self._db: Any = sqlite3.connect(self.path, check_same_thread=False)
             self._db.row_factory = sqlite3.Row
             self._db.execute("PRAGMA journal_mode=WAL")  # readers don't block the background scanner
             self._db.execute("PRAGMA busy_timeout=5000")

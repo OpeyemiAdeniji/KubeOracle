@@ -172,7 +172,7 @@ class KubeClient:
                 data = resp.read()
                 status = resp.status
             else:  # kubernetes <= 36
-                resp = self.api.call_api(
+                resp = self.api.call_api(  # type: ignore[call-arg]  # the kubernetes <= 36 signature
                     path, method, query_params=query_params, header_params=headers, body=body,
                     auth_settings=["BearerToken"], _preload_content=False, _return_http_data_only=True,
                     _request_timeout=timeout or self.timeout,

@@ -101,7 +101,7 @@ def config_stale(ctx: Context) -> Iterator[Finding]:
                 obj = ctx.snap.get(key, ns, name)
                 changed, who = last_user_update(obj) if obj else (None, None)
                 if changed and changed > started + timedelta(seconds=30):
-                    stale.append((obj.get("kind"), name, changed, who))
+                    stale.append(((obj or {}).get("kind"), name, changed, who))
         if stale:
             kind, name, changed, who = stale[0]
             yield ctx.finding(
@@ -148,7 +148,7 @@ def apiservice_unavailable(ctx: Context) -> Iterator[Finding]:
     for svc in ctx.snap.all("apiservices"):
         if not (svc.get("spec") or {}).get("service"):
             continue  # built-in, served by the API server itself
-        cond = next((c for c in (svc.get("status") or {}).get("conditions") or [] if c.get("type") == "Available"), {})
+        cond: dict[str, Any] = next((c for c in (svc.get("status") or {}).get("conditions") or [] if c.get("type") == "Available"), {})
         if cond.get("status") != "False":
             continue
         backend = (svc.get("spec") or {}).get("service") or {}
@@ -274,7 +274,7 @@ def pvc_stuck(ctx: Context) -> Iterator[Finding]:
         if not deleted or (age(deleted) or timedelta()) < timedelta(minutes=10):
             continue
         ns, name = meta(pvc).get("namespace"), meta(pvc).get("name")
-        users = [meta(p).get("name") for p in ctx.snap.in_namespace("pods", ns)
+        users = [meta(p).get("name", "") for p in ctx.snap.in_namespace("pods", ns)
                  if any((v.get("persistentVolumeClaim") or {}).get("claimName") == name
                         for v in (p.get("spec") or {}).get("volumes") or [])]
         yield ctx.finding("pvc-stuck-terminating", pvc,

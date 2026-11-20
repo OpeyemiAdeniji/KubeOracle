@@ -196,7 +196,7 @@ def _capacity(docs: list[dict[str, Any]], live: Snapshot) -> list[Finding]:
     nodes = live.all("nodes")
     if not nodes:
         return out
-    used: dict[str, list[float]] = {meta(n).get("name"): [0.0, 0.0] for n in nodes}
+    used: dict[str, list[float]] = {meta(n).get("name", ""): [0.0, 0.0] for n in nodes}
     for p in live.all("pods"):
         node = (p.get("spec") or {}).get("nodeName")
         if node in used and (p.get("status") or {}).get("phase") in ("Running", "Pending"):
@@ -212,7 +212,7 @@ def _capacity(docs: list[dict[str, Any]], live: Snapshot) -> list[Finding]:
         if not ready:
             continue
         alloc = (n.get("status") or {}).get("allocatable") or {}
-        name = meta(n).get("name")
+        name = meta(n).get("name", "")
         free.append((n, parse_quantity(alloc.get("cpu")) - used[name][0], parse_quantity(alloc.get("memory")) - used[name][1]))
     for d in docs:
         if d.get("kind") not in _WORKLOADS:

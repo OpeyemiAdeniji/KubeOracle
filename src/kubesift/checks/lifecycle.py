@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from datetime import timedelta
+from typing import Any
 
 from kubesift.checks.base import Context, check
 from kubesift.checks.nodes import minor
@@ -124,7 +125,7 @@ def cert_expiring(ctx: Context) -> Iterator[Finding]:
 def cert_manager_not_ready(ctx: Context) -> Iterator[Finding]:
     """cert-manager cannot issue or renew a Certificate (DNS/HTTP challenge, issuer or rate-limit problems)."""
     for c in ctx.snap.all("certificates"):
-        ready = next((x for x in (c.get("status") or {}).get("conditions") or [] if x.get("type") == "Ready"), {})
+        ready: dict[str, Any] = next((x for x in (c.get("status") or {}).get("conditions") or [] if x.get("type") == "Ready"), {})
         if ready.get("status") == "False":
             yield ctx.finding("certificate-not-ready", c, f"Not ready ({ready.get('reason')}): {ready.get('message', '')[:250]}",
                               commands=[f"kubectl describe certificate {meta(c).get('name')} -n {meta(c).get('namespace')}",

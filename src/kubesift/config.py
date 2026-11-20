@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Any
 
 import yaml
 from pydantic import BaseModel, Field
@@ -158,7 +159,7 @@ def _coerce(value: str, annotation: object) -> object:
 
 
 def load_settings(**overrides: object) -> Settings:
-    data: dict[str, object] = {}
+    data: dict[str, Any] = {}
     path = Path(os.environ.get("KUBESIFT_CONFIG", Path.home() / ".config" / "kubesift" / "config.yaml"))
     if path.is_file():
         loaded = yaml.safe_load(path.read_text(encoding="utf-8")) or {}

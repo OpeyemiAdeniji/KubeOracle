@@ -34,6 +34,7 @@ jobs:
           cache: pip
       - run: pip install -e ".[dev]"
       - run: ruff check src tests
+      - run: mypy
       - run: pytest --cov=kubesift --cov-report=term-missing
 
   docs:

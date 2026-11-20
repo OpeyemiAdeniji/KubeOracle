@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from datetime import timedelta
+from typing import Any
 
 from kubesift.checks.base import Context, check
 from kubesift.models import Category, Finding, Severity
@@ -13,7 +14,7 @@ from kubesift.util import age, human_duration, meta
 @check("pvc-pending", "Volume claim is not bound", Category.STORAGE, Severity.HIGH)
 def pvc_pending(ctx: Context) -> Iterator[Finding]:
     """A PVC is Pending or Lost, so pods using it cannot start."""
-    classes = {meta(sc).get("name"): sc for sc in ctx.snap.all("storageclasses")}
+    classes: dict[str, dict[str, Any]] = {meta(sc).get("name", ""): sc for sc in ctx.snap.all("storageclasses")}
     default = [n for n, sc in classes.items()
                if (meta(sc).get("annotations") or {}).get("storageclass.kubernetes.io/is-default-class") == "true"]
     for pvc in ctx.snap.all("pvcs"):
