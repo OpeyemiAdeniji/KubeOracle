@@ -128,7 +128,7 @@ def job_failed(ctx: Context) -> Iterator[Finding]:
 @check("cronjob-failing", "CronJob's recent runs fail", Category.WORKLOAD, Severity.HIGH)
 def cronjob_failing(ctx: Context) -> Iterator[Finding]:
     """The last scheduled run failed or there has been no success since the last schedule."""
-    jobs_by_cron: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    jobs_by_cron: dict[tuple[str | None, str | None], list[dict[str, Any]]] = {}
     for job in ctx.snap.all("jobs"):
         for r in meta(job).get("ownerReferences") or []:
             if r.get("kind") == "CronJob":

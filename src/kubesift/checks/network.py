@@ -200,7 +200,7 @@ def ingress_nginx_retired(ctx: Context) -> Iterator[Finding]:
                if (ic.get("spec") or {}).get("controller") == "k8s.io/ingress-nginx"]
     if not controllers and not classes:
         return
-    class_names = {meta(ic).get("name") for ic in classes} or {"nginx"}
+    class_names: set[str] = {meta(ic).get("name", "") for ic in classes} or {"nginx"}
     using = [i for i in ctx.snap.all("ingresses")
              if (i.get("spec") or {}).get("ingressClassName") in class_names
              or (meta(i).get("annotations") or {}).get("kubernetes.io/ingress.class") in class_names]

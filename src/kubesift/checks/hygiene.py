@@ -37,7 +37,7 @@ def missing_readiness(ctx: Context) -> Iterator[Finding]:
     for obj, spec in templates(ctx):
         if obj.get("kind") not in ("Deployment", "StatefulSet"):
             continue
-        missing = [c.get("name") for c in containers_of(spec) if not c.get("readinessProbe")]
+        missing = [c.get("name", "") for c in containers_of(spec) if not c.get("readinessProbe")]
         if missing and any(c.get("ports") for c in containers_of(spec)):
             yield ctx.finding("probe-missing-readiness", obj, f"Containers {', '.join(missing)} have no readinessProbe.",
                               remediation="Add a readinessProbe that checks the app can serve requests (e.g. GET /ready).")

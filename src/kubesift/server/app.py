@@ -11,7 +11,7 @@ from collections import defaultdict
 from contextlib import asynccontextmanager
 from datetime import timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeGuard
 
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -212,7 +212,7 @@ def create_app(settings: Settings) -> FastAPI:
             names = [c.get("name", "") for c in (spec.get("initContainers") or []) + (spec.get("containers") or [])]
             if container is None:  # the first container that is not an init container
                 container = next((c.get("name") for c in spec.get("containers") or []), None)
-            if container not in names:
+            if container is None or container not in names:
                 raise HTTPException(status_code=400, detail=f"container must be one of: {', '.join(names)}")
             text = client.pod_logs(namespace, pod, container, previous, tail=max(1, min(tail, 1000)))
         except KubeError as exc:
@@ -447,17 +447,18 @@ def create_app(settings: Settings) -> FastAPI:
         firing = [a for a in payload.get("alerts") or [] if a.get("status") == "firing"]
         from kubesift.util import check_name
 
-        def _valid(ns: Any) -> bool:
+        def _valid(ns: Any) -> TypeGuard[str]:
             try:
                 return isinstance(ns, str) and bool(check_name(ns))
             except ValueError:
                 return False
-        namespaces = sorted({(a.get("labels") or {}).get("namespace") for a in firing if
-                             _valid((a.get("labels") or {}).get("namespace"))})
+        alert_ns = [(a.get("labels") or {}).get("namespace") for a in firing]
+        namespaces = sorted({ns for ns in alert_ns if _valid(ns)})
         names = ", ".join(sorted({(a.get("labels") or {}).get("alertname", "?") for a in firing}))
         # Alert storms fire the same alert many times; investigate each namespace at most once per cooldown.
         # The claim lives in the database, so replicas behind one Service don't duplicate the work.
-        due = [ns for ns in namespaces or [None] if store.claim(f"alert:{ns or '*'}", settings.alert_cooldown)]
+        targets: list[str | None] = [*namespaces] or [None]  # None: the alert named no namespace, scan all
+        due = [ns for ns in targets if store.claim(f"alert:{ns or '*'}", settings.alert_cooldown)]
         if due:
             background.add_task(_alert_investigation, settings, store, due, names)
         return {"accepted": len(firing), "namespaces": namespaces, "investigating": due}

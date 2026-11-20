@@ -54,7 +54,7 @@ class AnthropicProvider(Provider):
 
     def complete_json(self, system: str, user: str, schema: dict[str, Any]) -> dict[str, Any]:
         a = self._anthropic
-        request = {
+        request: dict[str, Any] = {
             "model": self.model,
             "max_tokens": 16000,
             "system": system,

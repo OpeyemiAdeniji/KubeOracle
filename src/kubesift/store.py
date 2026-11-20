@@ -52,7 +52,7 @@ class Store:
             path = Path(data_dir).expanduser()
             path.mkdir(parents=True, exist_ok=True)
             self.path = path / "kubesift.db"
-            self._db = sqlite3.connect(self.path, check_same_thread=False)
+            self._db: Any = sqlite3.connect(self.path, check_same_thread=False)
             self._db.row_factory = sqlite3.Row
             self._db.execute("PRAGMA journal_mode=WAL")  # readers don't block the background scanner
             self._db.execute("PRAGMA busy_timeout=5000")
@@ -67,7 +67,7 @@ class Store:
             from psycopg.rows import dict_row
         except ImportError as exc:
             raise RuntimeError('PostgreSQL support needs: pip install "kubesift[postgres]"') from exc
-        self._db = psycopg.connect(self._url, autocommit=True, row_factory=dict_row, connect_timeout=10)
+        self._db = psycopg.connect(self._url or "", autocommit=True, row_factory=dict_row, connect_timeout=10)
 
     def _exec(self, sql: str, params: tuple = ()) -> Any:
         with self._lock:

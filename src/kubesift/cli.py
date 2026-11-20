@@ -842,6 +842,7 @@ def diff(
     from kubesift.util import now, parse_duration
 
     later = _load_snapshot_file(to_file) if to_file else _snapshot(namespace, with_logs=False)
+    earlier: dict[str, Any] | None
     if from_file:
         earlier = digest(_load_snapshot_file(from_file))
     elif since:
@@ -1033,7 +1034,7 @@ def main() -> Any:
     for stream in (sys.stdout, sys.stderr):  # Windows consoles default to cp1252
         if (getattr(stream, "encoding", "") or "").lower().replace("-", "") != "utf8":
             with contextlib.suppress(AttributeError, ValueError):
-                stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+                stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined,union-attr]
     try:
         return app()
     except KeyboardInterrupt:

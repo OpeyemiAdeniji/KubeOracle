@@ -85,7 +85,7 @@ def build(report: Report, snap: Snapshot | None = None, audit: list[dict[str, An
         summary = _polish(settings, report, summary) or summary
     end = resolved_at or now()
     return {
-        "title": title or (f"Incident: {d.root_causes[0].title}" if root else f"Incident review: {report.cluster}"),
+        "title": title or (f"Incident: {root.title}" if root else f"Incident review: {report.cluster}"),
         "cluster": report.cluster, "namespace": report.namespace or "all",
         "status": "resolved" if resolved_at else "ongoing",
         "start": start.isoformat() if start else None, "end": end.isoformat(),

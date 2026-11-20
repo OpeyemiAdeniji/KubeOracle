@@ -52,7 +52,7 @@ LOG_HINTS: list[tuple[re.Pattern[str], str]] = [
 ]
 
 
-def log_hints(ctx: Context, ns: str, pod: str, container: str) -> tuple[list[str], list[str]]:
+def log_hints(ctx: Context, ns: str | None, pod: str | None, container: str) -> tuple[list[str], list[str]]:
     entry = ctx.snap.logs.get(f"{ns}/{pod}/{container}")
     if not entry:
         return [], []
@@ -374,7 +374,7 @@ def pending(ctx: Context) -> Iterator[Finding]:
         if a is not None and a < timedelta(minutes=2):
             continue
         ns, pname = meta(pod).get("namespace"), meta(pod).get("name", "")
-        cond = next((c for c in status.get("conditions") or [] if c.get("type") == "PodScheduled"), {})
+        cond: dict[str, Any] = next((c for c in status.get("conditions") or [] if c.get("type") == "PodScheduled"), {})
         messages = [cond.get("message", "")] + [
             e.get("message", "") for e in ctx.snap.events_for("Pod", ns, pname) if e.get("reason") == "FailedScheduling"
         ]
@@ -475,7 +475,7 @@ def restarting(ctx: Context) -> Iterator[Finding]:
             if last.get("reason") == "OOMKilled":
                 continue
             finished = parse_time(last.get("finishedAt"))
-            if finished and age(last.get("finishedAt")) > timedelta(hours=24):
+            if finished and (age(last.get("finishedAt")) or timedelta()) > timedelta(hours=24):
                 continue  # old restarts, now stable
             code = last.get("exitCode")
             ns, pname = meta(pod).get("namespace"), meta(pod).get("name", "")

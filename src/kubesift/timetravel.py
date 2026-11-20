@@ -98,7 +98,7 @@ def _describe(key: str, old: dict[str, Any], new: dict[str, Any]) -> list[str]:
             for c in sorted(set(a or {}) | set(b or {})):
                 ca, cb = (a or {}).get(c), (b or {}).get(c)
                 if ca is None:
-                    out.append(f"container {c} added ({cb.get('image')})")
+                    out.append(f"container {c} added ({(cb or {}).get('image')})")
                 elif cb is None:
                     out.append(f"container {c} removed")
                 else:
