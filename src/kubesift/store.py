@@ -67,7 +67,7 @@ class Store:
             from psycopg.rows import dict_row
         except ImportError as exc:
             raise RuntimeError('PostgreSQL support needs: pip install "kubesift[postgres]"') from exc
-        self._db = psycopg.connect(self._url, autocommit=True, row_factory=dict_row, connect_timeout=10)
+        self._db = psycopg.connect(self._url or "", autocommit=True, row_factory=dict_row, connect_timeout=10)
 
     def _exec(self, sql: str, params: tuple = ()) -> Any:
         with self._lock:

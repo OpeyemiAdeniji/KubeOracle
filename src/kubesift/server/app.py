@@ -457,7 +457,8 @@ def create_app(settings: Settings) -> FastAPI:
         names = ", ".join(sorted({(a.get("labels") or {}).get("alertname", "?") for a in firing}))
         # Alert storms fire the same alert many times; investigate each namespace at most once per cooldown.
         # The claim lives in the database, so replicas behind one Service don't duplicate the work.
-        due = [ns for ns in namespaces or [None] if store.claim(f"alert:{ns or '*'}", settings.alert_cooldown)]
+        targets: list[str | None] = [*namespaces] or [None]  # None: the alert named no namespace, scan all
+        due = [ns for ns in targets if store.claim(f"alert:{ns or '*'}", settings.alert_cooldown)]
         if due:
             background.add_task(_alert_investigation, settings, store, due, names)
         return {"accepted": len(firing), "namespaces": namespaces, "investigating": due}
