@@ -2,8 +2,8 @@ apiVersion: v2
 name: kubesift
 description: Evidence-based Kubernetes troubleshooting service (dashboard, API, Alertmanager receiver, background scans)
 type: application
-version: 2.2.1
-appVersion: "2.2.1"
+version: 2.2.2
+appVersion: "2.2.2"
 home: https://opeyemiadeniji.github.io/KubeSift/
 sources:
   - https://github.com/OpeyemiAdeniji/KubeSift
@@ -19,7 +19,7 @@ annotations:
   artifacthub.io/category: monitoring-logging
   artifacthub.io/images: |
     - name: kubesift
-      image: ghcr.io/opeyemiadeniji/kubesift:2.2.1
+      image: ghcr.io/opeyemiadeniji/kubesift:2.2.2
   artifacthub.io/links: |
     - name: Website
       url: https://opeyemiadeniji.github.io/KubeSift/
@@ -30,8 +30,10 @@ annotations:
   # What changed in this version (shown on Artifact Hub). Kinds: added, changed, deprecated, removed, fixed, security.
   artifacthub.io/changes: |
     - kind: fixed
-      description: A node or Docker restart no longer shows as crash loops in every system pod; one low-severity node-restarted note says what happened (73 checks)
-    - kind: fixed
-      description: macOS binaries install with krew (the archives no longer contain symbolic links, which krew cannot unpack)
-    - kind: fixed
-      description: The one-line installer names the right shell file for PATH (zsh on macOS, bash, fish)
+      description: After a node or Docker restart, an app's own failure (for example a bad image tag) stays its own incident instead of being grouped under the node
+    - kind: security
+      description: Base image updated to the latest Chainguard Python (0 known vulnerabilities)
+    - kind: changed
+      description: krew manifest follows the krew-index rules (shorter tagline, no usage text in caveats)
+    - kind: changed
+      description: The code is type-checked with mypy in CI
